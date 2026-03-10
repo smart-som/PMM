@@ -57,6 +57,28 @@ Optional diagnostics:
 - Set `NEXT_PUBLIC_ENABLE_DEPLOY_DIAGNOSTICS=1` to log client-side Firebase config diagnostics.
 - Set `NEXT_PUBLIC_APP_COMMIT_SHA` or `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` to surface revision info in browser logs.
 
+### PM Dashboard Errors: `Could not create project` / `Could not load studies`
+
+These are typically Firestore rules authorization mismatches after adding new PM collections.
+
+Immediate unblock (Firebase Console):
+
+1. Open Firebase Console -> Firestore Database -> Rules.
+2. Paste the latest repo `firestore.rules`.
+3. Publish rules.
+4. Reload PM dashboard and retry create/load actions.
+
+Repo-managed deploy workflow:
+
+1. Authenticate once: `npx firebase-tools login`
+2. Validate rules deploy plan: `npm run firebase:rules:check`
+3. Deploy rules from repo: `npm run firebase:rules:deploy`
+
+Notes:
+
+- `.firebaserc` is configured for project `pm-m-14db4`.
+- If you use another Firebase project, update `.firebaserc` default project ID first.
+
 ### MetaMask Runtime Overlay in Dev
 
 If you see `Failed to connect to MetaMask` with a stack like `chrome-extension://...`, this is from a browser extension script injection, not ProductPulse app code.

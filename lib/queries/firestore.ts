@@ -57,6 +57,37 @@ function toMillis(value: unknown): number | undefined {
   return undefined;
 }
 
+function getFirebaseErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  if (!("code" in error)) return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : null;
+}
+
+function handleFirestoreQueryError(error: unknown, fallbackMessage: string) {
+  const code = getFirebaseErrorCode(error);
+  if (code === "permission-denied") {
+    toast.error(
+      `${fallbackMessage} Firestore permission denied. Verify/deploy firestore.rules and confirm ownerId == request.auth.uid for this document.`
+    );
+    return;
+  }
+
+  if (code === "failed-precondition") {
+    toast.error(
+      `${fallbackMessage} Firestore is missing required configuration (index or project setup).`
+    );
+    return;
+  }
+
+  if (code) {
+    toast.error(`${fallbackMessage} (${code})`);
+    return;
+  }
+
+  toast.error(fallbackMessage);
+}
+
 async function deleteDocumentIdsInBatches(
   collectionName: string,
   ids: string[]
@@ -159,7 +190,7 @@ export async function getProjectsByOwner(ownerId: string): Promise<Project[]> {
       } satisfies Project;
     });
   } catch (error) {
-    toast.error("Could not load projects.");
+    handleFirestoreQueryError(error, "Could not load projects.");
     throw error;
   }
 }
@@ -177,7 +208,7 @@ export async function getStudiesByHelper(helperId: string): Promise<Study[]> {
       })
     );
   } catch (error) {
-    toast.error("Could not load assigned studies.");
+    handleFirestoreQueryError(error, "Could not load assigned studies.");
     throw error;
   }
 }
@@ -209,7 +240,7 @@ export async function getPublishedActiveSurveys(): Promise<ActiveSurvey[]> {
       };
     });
   } catch (error) {
-    toast.error("Could not load published surveys.");
+    handleFirestoreQueryError(error, "Could not load published surveys.");
     throw error;
   }
 }
@@ -227,7 +258,7 @@ export async function getStudiesByOwner(ownerId: string): Promise<Study[]> {
       })
     );
   } catch (error) {
-    toast.error("Could not load studies.");
+    handleFirestoreQueryError(error, "Could not load studies.");
     throw error;
   }
 }
@@ -243,7 +274,7 @@ export async function createProject(ownerId: string, name: string): Promise<stri
     toast.success("Project created.");
     return projectDoc.id;
   } catch (error) {
-    toast.error("Could not create project.");
+    handleFirestoreQueryError(error, "Could not create project.");
     throw error;
   }
 }
@@ -295,7 +326,7 @@ export async function createStudy(input: CreateStudyInput): Promise<void> {
     await write.commit();
     toast.success("Study created.");
   } catch (error) {
-    toast.error("Could not create study.");
+    handleFirestoreQueryError(error, "Could not create study.");
     throw error;
   }
 }
@@ -329,7 +360,7 @@ export async function updateStudyStatus(
     await write.commit();
     toast.success(status === "published" ? "Study published." : "Study moved to draft.");
   } catch (error) {
-    toast.error("Could not update study status.");
+    handleFirestoreQueryError(error, "Could not update study status.");
     throw error;
   }
 }
@@ -363,7 +394,7 @@ export async function createSubmission(
     });
     toast.success("Study submitted for review.");
   } catch (error) {
-    toast.error("Could not submit study.");
+    handleFirestoreQueryError(error, "Could not submit study.");
     throw error;
   }
 }
@@ -435,7 +466,7 @@ export async function getPmResearchSummary(
       studies: studySummaries
     };
   } catch (error) {
-    toast.error("Could not load research summary.");
+    handleFirestoreQueryError(error, "Could not load research summary.");
     throw error;
   }
 }
@@ -507,7 +538,7 @@ export async function getHelperEarningsSummary(
       entries
     };
   } catch (error) {
-    toast.error("Could not load earnings summary.");
+    handleFirestoreQueryError(error, "Could not load earnings summary.");
     throw error;
   }
 }
@@ -523,7 +554,7 @@ export async function getHelperProfile(helperId: string): Promise<HelperProfile>
       availability: typeof data?.availability === "string" ? data.availability : ""
     };
   } catch (error) {
-    toast.error("Could not load helper profile.");
+    handleFirestoreQueryError(error, "Could not load helper profile.");
     throw error;
   }
 }
@@ -545,7 +576,7 @@ export async function updateHelperProfile(
     );
     toast.success("Profile updated.");
   } catch (error) {
-    toast.error("Could not update profile.");
+    handleFirestoreQueryError(error, "Could not update profile.");
     throw error;
   }
 }
@@ -584,7 +615,7 @@ export async function getOrCreatePrdDocument(
       updatedAt: toMillis(data.updatedAt)
     };
   } catch (error) {
-    toast.error("Could not load PRD.");
+    handleFirestoreQueryError(error, "Could not load PRD.");
     throw error;
   }
 }
@@ -606,7 +637,7 @@ export async function createPrdDocument(
     toast.success("PRD draft created.");
     return prdRef.id;
   } catch (error) {
-    toast.error("Could not create PRD draft.");
+    handleFirestoreQueryError(error, "Could not create PRD draft.");
     throw error;
   }
 }
@@ -636,7 +667,7 @@ export async function savePrdContent(
     );
     toast.success("PRD saved.");
   } catch (error) {
-    toast.error("Could not save PRD.");
+    handleFirestoreQueryError(error, "Could not save PRD.");
     throw error;
   }
 }
@@ -664,7 +695,7 @@ export async function getPrdsByOwner(ownerId: string): Promise<PrdDocument[]> {
       } satisfies PrdDocument;
     });
   } catch (error) {
-    toast.error("Could not load roadmap PRDs.");
+    handleFirestoreQueryError(error, "Could not load roadmap PRDs.");
     throw error;
   }
 }
@@ -682,7 +713,7 @@ export async function deletePrdDocument(prdId: string, ownerId: string): Promise
     await deleteDoc(prdRef);
     toast.success("PRD deleted.");
   } catch (error) {
-    toast.error("Could not delete PRD.");
+    handleFirestoreQueryError(error, "Could not delete PRD.");
     throw error;
   }
 }
@@ -705,7 +736,7 @@ export async function updatePrdLaunchQuarter(
     );
     toast.success("Roadmap launch quarter updated.");
   } catch (error) {
-    toast.error("Could not update roadmap quarter.");
+    handleFirestoreQueryError(error, "Could not update roadmap quarter.");
     throw error;
   }
 }
@@ -730,7 +761,7 @@ export async function createRoadmapPlaceholderPrd(
     });
     toast.success("Placeholder added to roadmap.");
   } catch (error) {
-    toast.error("Could not save roadmap placeholder.");
+    handleFirestoreQueryError(error, "Could not save roadmap placeholder.");
     throw error;
   }
 }
@@ -760,7 +791,7 @@ export async function createRoadmapItem(
     });
     toast.success("Roadmap item added.");
   } catch (error) {
-    toast.error("Could not create roadmap item.");
+    handleFirestoreQueryError(error, "Could not create roadmap item.");
     throw error;
   }
 }
@@ -787,7 +818,7 @@ export async function getRoadmapItemsByOwner(
           : undefined
     }));
   } catch (error) {
-    toast.error("Could not load roadmap items.");
+    handleFirestoreQueryError(error, "Could not load roadmap items.");
     throw error;
   }
 }
@@ -805,7 +836,7 @@ export async function deleteRoadmapItem(itemId: string, ownerId: string): Promis
     await deleteDoc(itemRef);
     toast.success("Roadmap item deleted.");
   } catch (error) {
-    toast.error("Could not delete roadmap item.");
+    handleFirestoreQueryError(error, "Could not delete roadmap item.");
     throw error;
   }
 }
@@ -840,7 +871,7 @@ export async function getPmResearchSessionsByOwner(
       } satisfies PmResearchSession;
     });
   } catch (error) {
-    toast.error("Could not load research sessions.");
+    handleFirestoreQueryError(error, "Could not load research sessions.");
     throw error;
   }
 }
@@ -861,7 +892,7 @@ export async function createPmResearchSession(
     });
     toast.success("Research session saved.");
   } catch (error) {
-    toast.error("Could not save research session.");
+    handleFirestoreQueryError(error, "Could not save research session.");
     throw error;
   }
 }
@@ -882,7 +913,7 @@ export async function deletePmResearchSession(
     await deleteDoc(ref);
     toast.success("Research session deleted.");
   } catch (error) {
-    toast.error("Could not delete research session.");
+    handleFirestoreQueryError(error, "Could not delete research session.");
     throw error;
   }
 }
@@ -917,7 +948,7 @@ export async function getAnalyticsReportsByOwner(
       } satisfies AnalyticsReport;
     });
   } catch (error) {
-    toast.error("Could not load analytics reports.");
+    handleFirestoreQueryError(error, "Could not load analytics reports.");
     throw error;
   }
 }
@@ -938,7 +969,7 @@ export async function createAnalyticsReport(
     });
     toast.success("Analytics report saved.");
   } catch (error) {
-    toast.error("Could not save analytics report.");
+    handleFirestoreQueryError(error, "Could not save analytics report.");
     throw error;
   }
 }
@@ -959,7 +990,7 @@ export async function deleteAnalyticsReport(
     await deleteDoc(ref);
     toast.success("Analytics report deleted.");
   } catch (error) {
-    toast.error("Could not delete analytics report.");
+    handleFirestoreQueryError(error, "Could not delete analytics report.");
     throw error;
   }
 }
@@ -994,7 +1025,7 @@ export async function getJourneyMapsByOwner(ownerId: string): Promise<JourneyMap
       } satisfies JourneyMap;
     });
   } catch (error) {
-    toast.error("Could not load journey maps.");
+    handleFirestoreQueryError(error, "Could not load journey maps.");
     throw error;
   }
 }
@@ -1014,7 +1045,7 @@ export async function createJourneyMap(input: CreateJourneyMapInput): Promise<vo
     });
     toast.success("Journey map saved.");
   } catch (error) {
-    toast.error("Could not save journey map.");
+    handleFirestoreQueryError(error, "Could not save journey map.");
     throw error;
   }
 }
@@ -1032,7 +1063,7 @@ export async function deleteJourneyMap(mapId: string, ownerId: string): Promise<
     await deleteDoc(ref);
     toast.success("Journey map deleted.");
   } catch (error) {
-    toast.error("Could not delete journey map.");
+    handleFirestoreQueryError(error, "Could not delete journey map.");
     throw error;
   }
 }
@@ -1076,7 +1107,7 @@ export async function getAbTestExperimentsByOwner(
       } satisfies AbTestExperiment;
     });
   } catch (error) {
-    toast.error("Could not load A/B tests.");
+    handleFirestoreQueryError(error, "Could not load A/B tests.");
     throw error;
   }
 }
@@ -1100,7 +1131,7 @@ export async function createAbTestExperiment(
     });
     toast.success("A/B test saved.");
   } catch (error) {
-    toast.error("Could not save A/B test.");
+    handleFirestoreQueryError(error, "Could not save A/B test.");
     throw error;
   }
 }
@@ -1121,7 +1152,7 @@ export async function deleteAbTestExperiment(
     await deleteDoc(ref);
     toast.success("A/B test deleted.");
   } catch (error) {
-    toast.error("Could not delete A/B test.");
+    handleFirestoreQueryError(error, "Could not delete A/B test.");
     throw error;
   }
 }
@@ -1192,7 +1223,8 @@ export async function deleteProjectCascade(
     await deleteDoc(projectRef);
     toast.success("Project and all linked artifacts deleted.");
   } catch (error) {
-    toast.error("Could not delete project.");
+    handleFirestoreQueryError(error, "Could not delete project.");
     throw error;
   }
 }
+

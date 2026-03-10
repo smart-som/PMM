@@ -53,10 +53,34 @@ service cloud.firestore {
     match /prds/{prdId} {
       allow read, update: if isPM() && resource.data.ownerId == request.auth.uid;
       allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
-      allow delete: if false;
+      allow delete: if isPM() && resource.data.ownerId == request.auth.uid;
     }
 
     match /roadmap_items/{itemId} {
+      allow read: if isPM() && resource.data.ownerId == request.auth.uid;
+      allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isPM() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /pm_research_sessions/{sessionId} {
+      allow read: if isPM() && resource.data.ownerId == request.auth.uid;
+      allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isPM() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /analytics_reports/{reportId} {
+      allow read: if isPM() && resource.data.ownerId == request.auth.uid;
+      allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isPM() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /journey_maps/{mapId} {
+      allow read: if isPM() && resource.data.ownerId == request.auth.uid;
+      allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isPM() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /ab_tests/{experimentId} {
       allow read: if isPM() && resource.data.ownerId == request.auth.uid;
       allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
       allow update, delete: if isPM() && resource.data.ownerId == request.auth.uid;

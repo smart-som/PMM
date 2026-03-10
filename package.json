@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "firebase:rules:check": "npx firebase-tools deploy --only firestore:rules --project default --dry-run",
+    "firebase:rules:deploy": "npx firebase-tools deploy --only firestore:rules --project default"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.9",
