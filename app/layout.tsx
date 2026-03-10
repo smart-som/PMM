@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import "@/app/globals.css";
+import { getMissingFirebasePublicEnvKeys } from "@/lib/firebase/config";
 import { AppProviders } from "@/providers/app-providers";
 
 const geistSans = Geist({
@@ -36,11 +37,37 @@ export const metadata: Metadata = {
   description: "All-in-one PM platform for discovery, research, and PRD delivery"
 };
 
+let hasLoggedDeploymentDiagnostics = false;
+
+function logDeploymentDiagnostics() {
+  if (hasLoggedDeploymentDiagnostics) return;
+  hasLoggedDeploymentDiagnostics = true;
+
+  const revision =
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ??
+    "unknown";
+  const missingFirebaseKeys = getMissingFirebasePublicEnvKeys();
+
+  if (missingFirebaseKeys.length) {
+    console.warn(
+      `[deploy] revision=${revision} missing Firebase public env keys: ${missingFirebaseKeys.join(", ")}`
+    );
+    return;
+  }
+
+  console.info(
+    `[deploy] revision=${revision} Firebase public env keys are present.`
+  );
+}
+
 export default function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  logDeploymentDiagnostics();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

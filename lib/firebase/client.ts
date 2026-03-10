@@ -2,7 +2,10 @@ import { FirebaseApp, getApp, getApps, initializeApp } from "firebase/app";
 import { Auth, getAuth } from "firebase/auth";
 import { Firestore, getFirestore } from "firebase/firestore";
 
-import { firebaseConfig } from "@/lib/firebase/config";
+import {
+  firebaseConfig,
+  getMissingFirebasePublicEnvKeys
+} from "@/lib/firebase/config";
 
 export const FIREBASE_CLIENT_CONFIG_ERROR = "FIREBASE_CLIENT_CONFIG_MISSING";
 export const FIREBASE_CLIENT_CONFIG_ERROR_MESSAGE =
@@ -19,30 +22,30 @@ function warnFirebaseConfig(message: string) {
   console.warn(`[firebase] ${message}`);
 }
 
-function isPlaceholderValue(value: string) {
-  const normalized = value.trim().toLowerCase();
-  return (
-    normalized.length === 0 ||
-    normalized.includes("your-") ||
-    normalized.includes("replace-")
-  );
-}
-
 function hasValidFirebaseClientConfig() {
-  const required = [
-    firebaseConfig.apiKey,
-    firebaseConfig.authDomain,
-    firebaseConfig.projectId,
-    firebaseConfig.appId
-  ];
-  return required.every(
-    (value) => typeof value === "string" && !isPlaceholderValue(value)
-  );
+  return getMissingFirebasePublicEnvKeys().length === 0;
 }
 
 export function isFirebaseClientAvailable() {
   if (typeof window === "undefined") return false;
   return hasValidFirebaseClientConfig();
+}
+
+function getClientDeploymentRevision() {
+  return (
+    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ??
+    process.env.NEXT_PUBLIC_APP_COMMIT_SHA ??
+    "unknown"
+  );
+}
+
+export function getFirebaseClientDiagnostics() {
+  const missingKeys = getMissingFirebasePublicEnvKeys();
+  return {
+    deploymentRevision: getClientDeploymentRevision(),
+    missingKeys,
+    isAvailable: typeof window !== "undefined" && missingKeys.length === 0
+  };
 }
 
 function resolveFirebaseAppOrNull(): FirebaseApp | null {
@@ -54,7 +57,12 @@ function resolveFirebaseAppOrNull(): FirebaseApp | null {
   }
 
   if (!hasValidFirebaseClientConfig()) {
-    warnFirebaseConfig(FIREBASE_CLIENT_CONFIG_ERROR_MESSAGE);
+    const diagnostics = getFirebaseClientDiagnostics();
+    warnFirebaseConfig(
+      `${FIREBASE_CLIENT_CONFIG_ERROR_MESSAGE} Missing keys: ${diagnostics.missingKeys.join(
+        ", "
+      ) || "none"}. Revision: ${diagnostics.deploymentRevision}.`
+    );
     cachedApp = null;
     return cachedApp;
   }
