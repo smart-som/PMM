@@ -68,3 +68,5 @@ Use one of these to isolate it:
 - Test in a clean browser profile.
 
 Do not add global error suppression in app code for this.
+
+Redeploy trigger note: 2026-03-10 15:54:48 UTC.
