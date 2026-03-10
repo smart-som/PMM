@@ -79,6 +79,26 @@ Notes:
 - `.firebaserc` is configured for project `pm-m-14db4`.
 - If you use another Firebase project, update `.firebaserc` default project ID first.
 
+### Login `Internal Server Error` / Google sign-in issues
+
+If login fails after credential entry or Google sign-in falls back with errors:
+
+1. Verify server Firebase Admin env vars in Vercel (Preview + Production):
+   - `FIREBASE_ADMIN_PROJECT_ID`
+   - `FIREBASE_ADMIN_CLIENT_EMAIL`
+   - `FIREBASE_ADMIN_PRIVATE_KEY` (preserve line breaks as `\n`)
+2. Verify Firebase Authentication setup:
+   - Google provider enabled
+   - Authorized domains include active Vercel deployment domain and custom domain
+3. Redeploy with cleared cache and retry login.
+
+Session API error codes returned by `/api/session`:
+
+- `SESSION_ADMIN_CONFIG_MISSING`: missing/invalid `FIREBASE_ADMIN_*` envs
+- `SESSION_ID_TOKEN_INVALID`: expired/invalid Firebase ID token
+- `SESSION_COOKIE_CREATE_FAILED`: server cookie creation failed
+- `SESSION_REQUEST_INVALID` / `SESSION_ID_TOKEN_MISSING`: invalid client request payload
+
 ### MetaMask Runtime Overlay in Dev
 
 If you see `Failed to connect to MetaMask` with a stack like `chrome-extension://...`, this is from a browser extension script injection, not ProductPulse app code.

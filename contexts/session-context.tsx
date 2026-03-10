@@ -41,6 +41,13 @@ type SessionContextValue = {
 
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 const PENDING_SOCIAL_ROLE_KEY = "pending_social_role";
+type SessionApiErrorCode =
+  | "SESSION_ID_TOKEN_MISSING"
+  | "SESSION_REQUEST_INVALID"
+  | "SESSION_ADMIN_CONFIG_MISSING"
+  | "SESSION_ID_TOKEN_INVALID"
+  | "SESSION_COOKIE_CREATE_FAILED"
+  | "SESSION_SYNC_FAILED";
 
 function getFirebaseErrorCode(error: unknown): string | null {
   if (error && typeof error === "object" && "code" in error) {
@@ -61,6 +68,13 @@ function getAuthErrorMessage(
       SOCIAL_ACCOUNT_ROLE_MISMATCH:
         "This account is already linked to a different portal role.",
       UNAUTHORIZED_PORTAL_ROLE: "Unauthorized for this portal selection.",
+      SESSION_ADMIN_CONFIG_MISSING:
+        "Server auth config missing. Set FIREBASE_ADMIN_* in deployment.",
+      SESSION_ID_TOKEN_INVALID: "Session token is invalid or expired. Please sign in again.",
+      SESSION_COOKIE_CREATE_FAILED: "Could not create server session. Please try again.",
+      SESSION_REQUEST_INVALID: "Session request payload was invalid. Please try again.",
+      SESSION_ID_TOKEN_MISSING: "Session token is missing. Please sign in again.",
+      SESSION_SYNC_FAILED: "Could not sync server session. Please try again.",
       [FIREBASE_CLIENT_CONFIG_ERROR]: FIREBASE_CLIENT_CONFIG_ERROR_MESSAGE
     };
 
@@ -176,7 +190,18 @@ async function syncServerSession(user: User | null) {
   });
 
   if (!response.ok) {
-    throw new Error("SESSION_SYNC_FAILED");
+    let responseCode: string | undefined;
+    try {
+      const payload = (await response.json()) as {
+        code?: string;
+      };
+      responseCode = payload?.code;
+    } catch {
+      responseCode = undefined;
+    }
+
+    const code = responseCode as SessionApiErrorCode | undefined;
+    throw new Error(code ?? "SESSION_SYNC_FAILED");
   }
 }
 
@@ -356,7 +381,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           toast.success("Signed in with Google.");
           return appUser;
         } catch (error) {
-          if (getFirebaseErrorCode(error) === "auth/popup-blocked") {
+          const errorCode = getFirebaseErrorCode(error);
+          if (errorCode === "auth/popup-blocked" || errorCode === "auth/popup-closed-by-user") {
             persistPendingSocialRole(selectedRole);
             await authModule.signInWithRedirect(auth, provider);
             throw new Error("REDIRECT_IN_PROGRESS");
