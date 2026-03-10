@@ -1,5 +1,5 @@
 import { FirebaseApp, getApp, getApps, initializeApp } from "firebase/app";
-import { Auth, getAuth } from "firebase/auth";
+import type { Auth } from "firebase/auth";
 import { Firestore, getFirestore } from "firebase/firestore";
 
 import {
@@ -85,7 +85,7 @@ export function getFirebaseApp() {
   return resolveFirebaseAppOrNull();
 }
 
-export function getFirebaseAuth() {
+export async function getFirebaseAuth() {
   if (cachedAuth !== undefined) return cachedAuth;
 
   const app = resolveFirebaseAppOrNull();
@@ -95,6 +95,7 @@ export function getFirebaseAuth() {
   }
 
   try {
+    const { getAuth } = await import("firebase/auth");
     cachedAuth = getAuth(app);
     return cachedAuth;
   } catch (error) {
@@ -146,5 +147,4 @@ function createLazyFirebaseProxy<T extends object>(resolver: () => T | null): T 
 }
 
 export const app = createLazyFirebaseProxy<FirebaseApp>(getFirebaseApp);
-export const auth = createLazyFirebaseProxy<Auth>(getFirebaseAuth);
 export const db = createLazyFirebaseProxy<Firestore>(getFirebaseDb);

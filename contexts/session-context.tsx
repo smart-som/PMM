@@ -1,19 +1,6 @@
 "use client";
 
-import {
-  GoogleAuthProvider,
-  OAuthProvider,
-  User,
-  createUserWithEmailAndPassword,
-  deleteUser,
-  getRedirectResult,
-  onAuthStateChanged,
-  signInWithPopup,
-  signInWithRedirect,
-  signOut
-} from "firebase/auth";
-import { FirebaseError } from "firebase/app";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import type { User } from "firebase/auth";
 import {
   ReactNode,
   createContext,
@@ -27,8 +14,8 @@ import { toast } from "sonner";
 import {
   FIREBASE_CLIENT_CONFIG_ERROR,
   FIREBASE_CLIENT_CONFIG_ERROR_MESSAGE,
-  auth,
-  db,
+  getFirebaseAuth,
+  getFirebaseDb,
   isFirebaseClientAvailable
 } from "@/lib/firebase/client";
 import {
@@ -55,6 +42,14 @@ type SessionContextValue = {
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 const PENDING_SOCIAL_ROLE_KEY = "pending_social_role";
 
+function getFirebaseErrorCode(error: unknown): string | null {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string") return code;
+  }
+  return null;
+}
+
 function getAuthErrorMessage(
   error: unknown,
   mode: "login" | "signup" | "logout" | "google" | "apple"
@@ -74,7 +69,8 @@ function getAuthErrorMessage(
     }
   }
 
-  if (error instanceof FirebaseError) {
+  const firebaseErrorCode = getFirebaseErrorCode(error);
+  if (firebaseErrorCode) {
     const map: Record<string, string> = {
       "auth/invalid-api-key": "Firebase API key is invalid. Check NEXT_PUBLIC_FIREBASE_API_KEY.",
       "auth/email-already-in-use":
@@ -96,7 +92,7 @@ function getAuthErrorMessage(
       "auth/unauthorized-domain":
         "Current domain is not authorized in Firebase Authentication settings."
     };
-    return map[error.code] ?? `Auth error: ${error.code}`;
+    return map[firebaseErrorCode] ?? `Auth error: ${firebaseErrorCode}`;
   }
 
   if (mode === "login") return "Sign in failed.";
@@ -110,14 +106,15 @@ function getFirestoreProfileErrorMessage(error: unknown) {
     return FIREBASE_CLIENT_CONFIG_ERROR_MESSAGE;
   }
 
-  if (error instanceof FirebaseError) {
-    if (error.code === "permission-denied") {
+  const firebaseErrorCode = getFirebaseErrorCode(error);
+  if (firebaseErrorCode) {
+    if (firebaseErrorCode === "permission-denied") {
       return "Profile write denied by Firestore rules. Deploy latest firestore.rules.";
     }
-    if (error.code === "failed-precondition") {
+    if (firebaseErrorCode === "failed-precondition") {
       return "Firestore is not fully configured in this Firebase project.";
     }
-    return `Profile save failed: ${error.code}`;
+    return `Profile save failed: ${firebaseErrorCode}`;
   }
   return "Could not save user profile.";
 }
@@ -203,6 +200,22 @@ async function resolveAppUser(
   }
 }
 
+async function requireAuthClient() {
+  const auth = await getFirebaseAuth();
+  if (!auth) {
+    throw new Error(FIREBASE_CLIENT_CONFIG_ERROR);
+  }
+  return auth;
+}
+
+function requireDbClient() {
+  const db = getFirebaseDb();
+  if (!db) {
+    throw new Error(FIREBASE_CLIENT_CONFIG_ERROR);
+  }
+  return db;
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
@@ -215,66 +228,85 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void getRedirectResult(auth).catch((error) => {
-      if (error instanceof FirebaseError && error.code === "auth/operation-not-allowed") {
-        toast.error(
-          "Social sign-in provider is not configured. Enable Google/Apple in Firebase Authentication."
-        );
-        return;
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+
+    void (async () => {
+      const auth = await requireAuthClient();
+      const authModule = await import("firebase/auth");
+
+      void authModule.getRedirectResult(auth).catch((error) => {
+        if (getFirebaseErrorCode(error) === "auth/operation-not-allowed") {
+          toast.error(
+            "Social sign-in provider is not configured. Enable Google/Apple in Firebase Authentication."
+          );
+          return;
+        }
+        toast.error("Could not complete redirected sign-in.");
+      });
+
+      unsubscribe = authModule.onAuthStateChanged(auth, async (nextUser) => {
+        if (cancelled) return;
+
+        setLoading(true);
+        setFirebaseUser(nextUser);
+
+        if (!nextUser) {
+          setUser(null);
+          setSessionCookies(null);
+          try {
+            await syncServerSession(null);
+          } catch {
+            // Best effort cleanup only.
+          }
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const pendingRole = consumePendingSocialRole() ?? inferRoleFromLocation();
+          const providerId = nextUser.providerData[0]?.providerId ?? null;
+          const appUser = await resolveAppUser(nextUser, {
+            selectedRole: pendingRole,
+            providerId
+          });
+
+          setUser(appUser);
+          setSessionCookies(appUser);
+          await syncServerSession(nextUser);
+        } catch (error) {
+          const message = getAuthErrorMessage(error, "login");
+          if (message) {
+            toast.error(message);
+          }
+          setUser(null);
+          setSessionCookies(null);
+          try {
+            await authModule.signOut(auth);
+          } catch {
+            // Best effort cleanup only.
+          }
+          try {
+            await syncServerSession(null);
+          } catch {
+            // Best effort cleanup only.
+          }
+        } finally {
+          setLoading(false);
+        }
+      });
+    })().catch((error) => {
+      const message = getAuthErrorMessage(error, "login");
+      if (message) {
+        toast.error(message);
       }
-      toast.error("Could not complete redirected sign-in.");
+      setLoading(false);
     });
 
-    const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
-      setLoading(true);
-      setFirebaseUser(nextUser);
-
-      if (!nextUser) {
-        setUser(null);
-        setSessionCookies(null);
-        try {
-          await syncServerSession(null);
-        } catch {
-          // Best effort cleanup only.
-        }
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const pendingRole = consumePendingSocialRole() ?? inferRoleFromLocation();
-        const providerId = nextUser.providerData[0]?.providerId ?? null;
-        const appUser = await resolveAppUser(nextUser, {
-          selectedRole: pendingRole,
-          providerId
-        });
-
-        setUser(appUser);
-        setSessionCookies(appUser);
-        await syncServerSession(nextUser);
-      } catch (error) {
-        const message = getAuthErrorMessage(error, "login");
-        if (message) {
-          toast.error(message);
-        }
-        setUser(null);
-        setSessionCookies(null);
-        try {
-          await signOut(auth);
-        } catch {
-          // Best effort cleanup only.
-        }
-        try {
-          await syncServerSession(null);
-        } catch {
-          // Best effort cleanup only.
-        }
-      } finally {
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   const value = useMemo<SessionContextValue>(
@@ -297,7 +329,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
                 ? "Unauthorized. Please use the Helper Portal."
                 : "Unauthorized. Please use the PM Portal.";
             toast.error(message);
-            await signOut(auth);
+            const auth = await getFirebaseAuth();
+            if (auth) {
+              const authModule = await import("firebase/auth");
+              await authModule.signOut(auth);
+            }
             setSessionCookies(null);
             throw error;
           }
@@ -306,11 +342,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }
       },
       loginWithGoogle: async (selectedRole) => {
-        const provider = new GoogleAuthProvider();
+        const auth = await requireAuthClient();
+        const authModule = await import("firebase/auth");
+        const provider = new authModule.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: "select_account" });
 
         try {
-          const credential = await signInWithPopup(auth, provider);
+          const credential = await authModule.signInWithPopup(auth, provider);
           const appUser = await resolveAppUser(credential.user, {
             selectedRole,
             providerId: provider.providerId
@@ -318,9 +356,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           toast.success("Signed in with Google.");
           return appUser;
         } catch (error) {
-          if (error instanceof FirebaseError && error.code === "auth/popup-blocked") {
+          if (getFirebaseErrorCode(error) === "auth/popup-blocked") {
             persistPendingSocialRole(selectedRole);
-            await signInWithRedirect(auth, provider);
+            await authModule.signInWithRedirect(auth, provider);
             throw new Error("REDIRECT_IN_PROGRESS");
           }
           const message = getAuthErrorMessage(error, "google");
@@ -331,12 +369,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }
       },
       loginWithApple: async (selectedRole) => {
-        const provider = new OAuthProvider("apple.com");
+        const auth = await requireAuthClient();
+        const authModule = await import("firebase/auth");
+        const provider = new authModule.OAuthProvider("apple.com");
         provider.addScope("email");
         provider.addScope("name");
 
         try {
-          const credential = await signInWithPopup(auth, provider);
+          const credential = await authModule.signInWithPopup(auth, provider);
           const appUser = await resolveAppUser(credential.user, {
             selectedRole,
             providerId: provider.providerId
@@ -344,9 +384,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           toast.success("Signed in with Apple.");
           return appUser;
         } catch (error) {
-          if (error instanceof FirebaseError && error.code === "auth/popup-blocked") {
+          if (getFirebaseErrorCode(error) === "auth/popup-blocked") {
             persistPendingSocialRole(selectedRole);
-            await signInWithRedirect(auth, provider);
+            await authModule.signInWithRedirect(auth, provider);
             throw new Error("REDIRECT_IN_PROGRESS");
           }
           const message = getAuthErrorMessage(error, "apple");
@@ -357,28 +397,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }
       },
       signup: async (email, password, role) => {
-        let credential: Awaited<ReturnType<typeof createUserWithEmailAndPassword>> | null = null;
+        const auth = await requireAuthClient();
+        const db = requireDbClient();
+        const authModule = await import("firebase/auth");
+        const firestoreModule = await import("firebase/firestore");
+        let credential: Awaited<ReturnType<typeof authModule.createUserWithEmailAndPassword>> | null = null;
         try {
-          credential = await createUserWithEmailAndPassword(auth, email, password);
-          await setDoc(doc(db, "users", credential.user.uid), {
+          credential = await authModule.createUserWithEmailAndPassword(auth, email, password);
+          await firestoreModule.setDoc(firestoreModule.doc(db, "users", credential.user.uid), {
             email,
             role,
             displayName: credential.user.displayName ?? "",
             expertise: "",
             availability: "",
             authProviders: ["password"],
-            createdAt: serverTimestamp()
+            createdAt: firestoreModule.serverTimestamp()
           });
           toast.success("Account created.");
         } catch (error) {
+          const firebaseErrorCode = getFirebaseErrorCode(error);
           // Roll back partially-created auth user if profile write fails.
-          if (
-            credential?.user &&
-            error instanceof FirebaseError &&
-            !error.code.startsWith("auth/")
-          ) {
+          if (credential?.user && firebaseErrorCode && !firebaseErrorCode.startsWith("auth/")) {
             try {
-              await deleteUser(credential.user);
+              await authModule.deleteUser(credential.user);
             } catch {
               // Best effort rollback only.
             }
@@ -394,7 +435,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           if (typeof window !== "undefined") {
             sessionStorage.removeItem(PENDING_SOCIAL_ROLE_KEY);
           }
-          await signOut(auth);
+          const auth = await getFirebaseAuth();
+          if (auth) {
+            const authModule = await import("firebase/auth");
+            await authModule.signOut(auth);
+          }
           setSessionCookies(null);
           await syncServerSession(null);
           toast.success("Signed out.");

@@ -1,10 +1,23 @@
-import { User, signInWithEmailAndPassword } from "firebase/auth";
+import type { User } from "firebase/auth";
 import { arrayUnion, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
-import { auth, db } from "@/lib/firebase/client";
+import {
+  FIREBASE_CLIENT_CONFIG_ERROR,
+  getFirebaseAuth,
+  getFirebaseDb
+} from "@/lib/firebase/client";
 import { AppUser, UserRole } from "@/types/app";
 
+function requireFirebaseDb() {
+  const db = getFirebaseDb();
+  if (!db) {
+    throw new Error(FIREBASE_CLIENT_CONFIG_ERROR);
+  }
+  return db;
+}
+
 export async function resolveUserProfile(uid: string, email: string | null): Promise<AppUser> {
+  const db = requireFirebaseDb();
   const profileRef = doc(db, "users", uid);
   const profileSnap = await getDoc(profileRef);
 
@@ -32,6 +45,12 @@ export async function loginAndResolveRole(
   email: string,
   password: string
 ): Promise<AppUser> {
+  const auth = await getFirebaseAuth();
+  if (!auth) {
+    throw new Error(FIREBASE_CLIENT_CONFIG_ERROR);
+  }
+
+  const { signInWithEmailAndPassword } = await import("firebase/auth");
   const credential = await signInWithEmailAndPassword(auth, email, password);
   return resolveUserProfile(credential.user.uid, credential.user.email);
 }
@@ -50,6 +69,7 @@ export async function resolveOrCreateUserProfile(
   firebaseUser: User,
   options?: ResolveOrCreateUserProfileOptions
 ): Promise<AppUser> {
+  const db = requireFirebaseDb();
   const profileRef = doc(db, "users", firebaseUser.uid);
   const profileSnap = await getDoc(profileRef);
   const providerId = normalizedProvider(options?.providerId ?? null);
