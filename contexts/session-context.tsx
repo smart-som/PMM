@@ -24,7 +24,13 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { auth, db } from "@/lib/firebase/client";
+import {
+  FIREBASE_CLIENT_CONFIG_ERROR,
+  FIREBASE_CLIENT_CONFIG_ERROR_MESSAGE,
+  auth,
+  db,
+  isFirebaseClientAvailable
+} from "@/lib/firebase/client";
 import {
   loginAndResolveRole,
   resolveOrCreateUserProfile
@@ -59,7 +65,8 @@ function getAuthErrorMessage(
       ROLE_SELECTION_REQUIRED: "Select PM or Helper before continuing.",
       SOCIAL_ACCOUNT_ROLE_MISMATCH:
         "This account is already linked to a different portal role.",
-      UNAUTHORIZED_PORTAL_ROLE: "Unauthorized for this portal selection."
+      UNAUTHORIZED_PORTAL_ROLE: "Unauthorized for this portal selection.",
+      [FIREBASE_CLIENT_CONFIG_ERROR]: FIREBASE_CLIENT_CONFIG_ERROR_MESSAGE
     };
 
     if (customErrorMap[error.message] !== undefined) {
@@ -99,6 +106,10 @@ function getAuthErrorMessage(
 }
 
 function getFirestoreProfileErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message === FIREBASE_CLIENT_CONFIG_ERROR) {
+    return FIREBASE_CLIENT_CONFIG_ERROR_MESSAGE;
+  }
+
   if (error instanceof FirebaseError) {
     if (error.code === "permission-denied") {
       return "Profile write denied by Firestore rules. Deploy latest firestore.rules.";
@@ -198,6 +209,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isFirebaseClientAvailable()) {
+      toast.error(FIREBASE_CLIENT_CONFIG_ERROR_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
     void getRedirectResult(auth).catch((error) => {
       if (error instanceof FirebaseError && error.code === "auth/operation-not-allowed") {
         toast.error(
