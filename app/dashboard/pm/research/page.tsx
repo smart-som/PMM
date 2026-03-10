@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import {
 } from "@/lib/queries/firestore";
 import { useRoleData } from "@/lib/queries/hooks";
 
-export default function PMResearchPage() {
+function PMResearchPageContent() {
   const { user } = useSession();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -202,5 +202,13 @@ export default function PMResearchPage() {
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+export default function PMResearchPage() {
+  return (
+    <Suspense fallback={<main className="p-6">Loading...</main>}>
+      <PMResearchPageContent />
+    </Suspense>
   );
 }

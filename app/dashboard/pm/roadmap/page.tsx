@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { generateRoadmapStrategy } from "@/app/dashboard/pm/roadmap/actions";
@@ -26,7 +26,7 @@ import { RoadmapCard, RoadmapItem, RoadmapPriority, RoadmapQuarter } from "@/typ
 
 const QUARTERS: RoadmapQuarter[] = ["Q1", "Q2", "Q3", "Q4"];
 
-export default function RoadmapCanvasPage() {
+function RoadmapCanvasPageContent() {
   const { user } = useSession();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -453,5 +453,13 @@ export default function RoadmapCanvasPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function RoadmapCanvasPage() {
+  return (
+    <Suspense fallback={<main className="p-6">Loading...</main>}>
+      <RoadmapCanvasPageContent />
+    </Suspense>
   );
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import {
 } from "@/lib/queries/firestore";
 import { useRoleData } from "@/lib/queries/hooks";
 
-export default function PrdIndexPage() {
+function PrdIndexPageContent() {
   const { user } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -127,5 +127,13 @@ export default function PrdIndexPage() {
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+export default function PrdIndexPage() {
+  return (
+    <Suspense fallback={<main className="p-6">Loading...</main>}>
+      <PrdIndexPageContent />
+    </Suspense>
   );
 }
