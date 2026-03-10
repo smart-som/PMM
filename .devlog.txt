@@ -1,0 +1,58 @@
+
+> productpulse@0.1.0 dev
+> next dev -p 4013
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\fmba3\package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * C:\Users\fmba3\OneDrive\Documents\PMM\package-lock.json
+
+   ▲ Next.js 15.5.12
+   - Local:        http://localhost:4013
+   - Network:      http://10.61.27.200:4013
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 4s
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 812ms (159 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 9.2s (918 modules)
+ GET / 200 in 11417ms
+ ✓ Compiled in 2.4s (311 modules)
+ ✓ Compiled in 1070ms (311 modules)
+ ✓ Compiled in 996ms (297 modules)
+ ✓ Compiled in 760ms (311 modules)
+ ✓ Compiled in 2.2s (311 modules)
+ ✓ Compiled in 1049ms (311 modules)
+ ✓ Compiled in 513ms (311 modules)
+ ✓ Compiled in 272ms (311 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'C:\Users\fmba3\OneDrive\Documents\PMM\.next\cache\webpack\client-development\1.pack.gz_' -> 'C:\Users\fmba3\OneDrive\Documents\PMM\.next\cache\webpack\client-development\1.pack.gz'
+   Reload env: .env.local
+ ✓ Compiled in 791ms (456 modules)
+ ✓ Compiled in 4.4s (311 modules)
+ ✓ Compiled in 563ms (311 modules)
+ ✓ Compiled in 395ms (311 modules)
+ ✓ Compiled in 417ms (311 modules)
+ ✓ Compiled in 453ms (311 modules)
+ ✓ Compiled in 342ms (311 modules)
+ ✓ Compiled in 270ms (311 modules)
+ ✓ Compiled in 306ms (311 modules)
+ ✓ Compiled in 288ms (311 modules)
+ ✓ Compiled in 328ms (311 modules)
+ ✓ Compiled in 619ms (470 modules)
+ ✓ Compiled in 590ms (470 modules)
+ ✓ Compiled in 204ms (311 modules)
+ ✓ Compiled in 273ms (311 modules)
+ ✓ Compiled in 322ms (311 modules)
+ ✓ Compiled in 312ms (311 modules)
+ ✓ Compiled in 302ms (311 modules)
+ ✓ Compiled in 242ms (311 modules)
+ ✓ Compiled in 288ms (311 modules)
+ ✓ Compiled in 356ms (311 modules)
+ ✓ Compiled in 586ms (456 modules)
+ ✓ Compiled in 674ms (311 modules)
+ ✓ Compiled in 292ms (311 modules)
+ ✓ Compiled in 1078ms (311 modules)

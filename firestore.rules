@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isPM() {
+      return isSignedIn() && userRole() == "pm";
+    }
+
+    function isHelper() {
+      return isSignedIn() && userRole() == "helper";
+    }
+
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /projects/{projectId} {
+      allow read: if isPM() && resource.data.ownerId == request.auth.uid;
+      allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isPM() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /studies/{studyId} {
+      allow read: if isPM() && resource.data.ownerId == request.auth.uid
+        || isHelper() && request.auth.uid in resource.data.helperIds;
+      allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isPM() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /active_surveys/{surveyId} {
+      allow read: if (isHelper() && resource.data.status == "published") || isPM();
+      allow create, update, delete: if isPM();
+    }
+
+    match /submissions/{submissionId} {
+      allow create: if isHelper()
+        && request.resource.data.helperId == request.auth.uid
+        && request.resource.data.status == "pending_review";
+
+      allow read: if isHelper() && resource.data.helperId == request.auth.uid
+        || isPM() && get(/databases/$(database)/documents/studies/$(resource.data.studyId)).data.ownerId == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    match /prds/{prdId} {
+      allow read, update: if isPM() && resource.data.ownerId == request.auth.uid;
+      allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /roadmap_items/{itemId} {
+      allow read: if isPM() && resource.data.ownerId == request.auth.uid;
+      allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isPM() && resource.data.ownerId == request.auth.uid;
+    }
+  }
+}
