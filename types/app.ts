@@ -10,6 +10,7 @@ export type AppUser = {
 export type RoadmapQuarter = "Q1" | "Q2" | "Q3" | "Q4";
 export type SurveyQuestionType = "open_text" | "single_select" | "multi_select";
 export type StudyStatus = "draft" | "published";
+export type StudyDistributionMode = "open" | "assigned";
 
 export type SurveyQuestion = {
   id: string;
@@ -33,15 +34,18 @@ export type Project = {
 
 export type Study = {
   id: string;
-  projectId: string;
+  projectId: string | null;
   ownerId: string;
   title: string;
   userSegment: string;
   budgetPerResponse: number;
   surveyQuestions: SurveyQuestion[];
+  distributionMode: StudyDistributionMode;
   helperIds: string[];
   status: StudyStatus;
+  expiresAt?: number;
   createdAt?: number;
+  updatedAt?: number;
 };
 
 export type Submission = {
@@ -68,14 +72,29 @@ export type PrdDocument = {
 export type ActiveSurvey = {
   id: string;
   studyId: string;
-  projectId: string;
+  projectId: string | null;
   ownerId: string;
   title: string;
   description?: string;
   userSegment: string;
   status: StudyStatus;
+  distributionMode: StudyDistributionMode;
+  helperIds: string[];
   rewardAmount?: number;
   surveyQuestions: SurveyQuestion[];
+  expiresAt?: number;
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+export type StudyInsights = {
+  studyId: string;
+  ownerId: string;
+  responseCountAtGeneration: number;
+  themes: string[];
+  summary: string;
+  recommendations: string[];
+  updatedAt?: number;
 };
 
 export type RoadmapCard = {
@@ -188,13 +207,18 @@ export type HelperEarningsSummary = {
 export type PMResearchStudySummary = {
   studyId: string;
   title: string;
+  status: StudyStatus;
+  distributionMode: StudyDistributionMode;
   responseCount: number;
   pendingReviewCount: number;
 };
 
 export type PMResearchSummary = {
   totalStudies: number;
+  draftStudies: number;
+  publishedStudies: number;
   totalResponses: number;
   pendingReview: number;
+  latestInsightAt?: number;
   studies: PMResearchStudySummary[];
 };

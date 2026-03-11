@@ -135,6 +135,9 @@ export default function HelperPortalPage() {
                 </p>
                 <p className="text-muted-foreground">Audience: {survey.userSegment || "General"}</p>
                 <p className="text-muted-foreground">Status: {survey.status}</p>
+                <p className="text-muted-foreground">
+                  Access: {survey.distributionMode === "assigned" ? "Assigned" : "Open"}
+                </p>
                 <p className="mt-2 text-xs text-muted-foreground">
                   Reward: ${survey.rewardAmount ?? 0}
                 </p>
@@ -244,7 +247,9 @@ export default function HelperPortalPage() {
               </li>
             ))}
             {!studiesQuery.data?.length && (
-              <li className="text-sm text-muted-foreground">No published surveys available.</li>
+              <li className="text-sm text-muted-foreground">
+                No research surveys are available for your helper account right now.
+              </li>
             )}
           </ul>
         </CardContent>

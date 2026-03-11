@@ -3,12 +3,18 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
+import {
+  SelectOptionEditor,
+  createSelectOptionDrafts,
+  getSelectOptionValidation,
+  sanitizeSelectOptions
+} from "@/components/research/select-option-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createStudy } from "@/lib/queries/firestore";
+import { SOLO_RESEARCH_TRIAL_DAYS, createStudy } from "@/lib/queries/firestore";
 import { Project, SurveyQuestion, SurveyQuestionType } from "@/types/app";
 
 type NewStudyModalProps = {
@@ -34,18 +40,26 @@ export function NewStudyModal({ open, ownerId, projects, onClose }: NewStudyModa
 
   const [questionPrompt, setQuestionPrompt] = useState("");
   const [questionType, setQuestionType] = useState<SurveyQuestionType>("open_text");
-  const [optionDraft, setOptionDraft] = useState("");
   const [questionOptions, setQuestionOptions] = useState<string[]>([]);
   const [surveyQuestions, setSurveyQuestions] = useState<SurveyQuestion[]>([]);
+  const questionOptionsValidation = useMemo(
+    () => (questionType === "open_text" ? null : getSelectOptionValidation(questionOptions)),
+    [questionOptions, questionType]
+  );
+  const canAddQuestion = useMemo(
+    () =>
+      questionPrompt.trim().length > 0 &&
+      (questionType === "open_text" || Boolean(questionOptionsValidation?.isValid)),
+    [questionOptionsValidation?.isValid, questionPrompt, questionType]
+  );
 
   const canSubmit = useMemo(
     () =>
       title.trim().length > 0 &&
-      projectId.trim().length > 0 &&
       userSegment.trim().length > 0 &&
       Number(budgetPerResponse) > 0 &&
       surveyQuestions.length > 0,
-    [budgetPerResponse, projectId, surveyQuestions.length, title, userSegment]
+    [budgetPerResponse, surveyQuestions.length, title, userSegment]
   );
 
   const createStudyMutation = useMutation({
@@ -58,7 +72,6 @@ export function NewStudyModal({ open, ownerId, projects, onClose }: NewStudyModa
       setBudgetPerResponse("");
       setQuestionPrompt("");
       setQuestionType("open_text");
-      setOptionDraft("");
       setQuestionOptions([]);
       setSurveyQuestions([]);
       onClose();
@@ -67,35 +80,20 @@ export function NewStudyModal({ open, ownerId, projects, onClose }: NewStudyModa
 
   useEffect(() => {
     if (!open) return;
-    if (projects.some((project) => project.id === projectId)) return;
-    setProjectId(projects[0]?.id ?? "");
+    if (!projectId || projects.some((project) => project.id === projectId)) return;
+    setProjectId("");
   }, [open, projectId, projects]);
 
   function resetQuestionDraft() {
     setQuestionPrompt("");
     setQuestionType("open_text");
-    setOptionDraft("");
     setQuestionOptions([]);
-  }
-
-  function addOption() {
-    const trimmed = optionDraft.trim();
-    if (!trimmed) return;
-    if (questionOptions.some((option) => option.toLowerCase() === trimmed.toLowerCase())) {
-      return;
-    }
-    setQuestionOptions((prev) => [...prev, trimmed]);
-    setOptionDraft("");
-  }
-
-  function removeOption(index: number) {
-    setQuestionOptions((prev) => prev.filter((_, i) => i !== index));
   }
 
   function addQuestion() {
     const prompt = questionPrompt.trim();
     if (!prompt) return;
-    if (questionType !== "open_text" && questionOptions.length < 2) return;
+    if (questionType !== "open_text" && !questionOptionsValidation?.isValid) return;
 
     setSurveyQuestions((prev) => [
       ...prev,
@@ -103,7 +101,7 @@ export function NewStudyModal({ open, ownerId, projects, onClose }: NewStudyModa
         id: nextQuestionId(),
         prompt,
         type: questionType,
-        options: questionType === "open_text" ? [] : questionOptions
+        options: questionType === "open_text" ? [] : sanitizeSelectOptions(questionOptions)
       }
     ]);
     resetQuestionDraft();
@@ -118,7 +116,7 @@ export function NewStudyModal({ open, ownerId, projects, onClose }: NewStudyModa
     if (!canSubmit) return;
 
     createStudyMutation.mutate({
-      projectId: projectId.trim(),
+      projectId: projectId.trim() || null,
       ownerId,
       title: title.trim(),
       userSegment: userSegment.trim(),
@@ -141,15 +139,15 @@ export function NewStudyModal({ open, ownerId, projects, onClose }: NewStudyModa
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-2">
-              <Label htmlFor="study-project-id">Project</Label>
+              <Label htmlFor="study-project-id">Project (Optional)</Label>
               <select
                 id="study-project-id"
                 value={projectId}
                 onChange={(event) => setProjectId(event.target.value)}
                 className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <option value="" disabled>
-                  Select a project
+                <option value="">
+                  Independent research ({SOLO_RESEARCH_TRIAL_DAYS}-day trial)
                 </option>
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
@@ -157,6 +155,11 @@ export function NewStudyModal({ open, ownerId, projects, onClose }: NewStudyModa
                   </option>
                 ))}
               </select>
+              <p className="text-xs text-muted-foreground">
+                {projectId.trim()
+                  ? "This study will stay attached to the selected project."
+                  : `Independent studies expire ${SOLO_RESEARCH_TRIAL_DAYS} days after first save unless you attach them to a project later.`}
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -210,9 +213,12 @@ export function NewStudyModal({ open, ownerId, projects, onClose }: NewStudyModa
                     const type = event.target.value as SurveyQuestionType;
                     setQuestionType(type);
                     if (type === "open_text") {
-                      setOptionDraft("");
                       setQuestionOptions([]);
+                      return;
                     }
+                    setQuestionOptions((current) =>
+                      current.length ? current : createSelectOptionDrafts()
+                    );
                   }}
                   className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -223,41 +229,21 @@ export function NewStudyModal({ open, ownerId, projects, onClose }: NewStudyModa
               </div>
 
               {questionType !== "open_text" && (
-                <div className="space-y-2">
-                  <Label>Options (min 2)</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={optionDraft}
-                      onChange={(event) => setOptionDraft(event.target.value)}
-                      placeholder="Add option"
-                    />
-                    <Button type="button" variant="outline" onClick={addOption}>
-                      Add
-                    </Button>
-                  </div>
-                  <ul className="space-y-1">
-                    {questionOptions.map((option, index) => (
-                      <li
-                        key={`${option}-${index}`}
-                        className="flex items-center justify-between rounded-md border border-border px-2 py-1 text-sm"
-                      >
-                        <span>{option}</span>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeOption(index)}
-                        >
-                          Remove
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <SelectOptionEditor
+                  label="Options"
+                  options={questionOptions}
+                  onChange={setQuestionOptions}
+                />
               )}
 
               <div className="flex justify-end">
-                <Button type="button" variant="outline" size="sm" onClick={addQuestion}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canAddQuestion}
+                  onClick={addQuestion}
+                >
                   Add question
                 </Button>
               </div>

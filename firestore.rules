@@ -35,8 +35,25 @@ service cloud.firestore {
     }
 
     match /active_surveys/{surveyId} {
-      allow read: if (isHelper() && resource.data.status == "published") || isPM();
-      allow create, update, delete: if isPM();
+      allow read: if isPM() && resource.data.ownerId == request.auth.uid
+        || isHelper()
+          && resource.data.status == "published"
+          && (
+            !("distributionMode" in resource.data)
+            || resource.data.distributionMode == "open"
+            || (
+              resource.data.distributionMode == "assigned"
+              && request.auth.uid in resource.data.helperIds
+            )
+          );
+      allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isPM() && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /study_insights/{studyId} {
+      allow read: if isPM() && resource.data.ownerId == request.auth.uid;
+      allow create: if isPM() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isPM() && resource.data.ownerId == request.auth.uid;
     }
 
     match /submissions/{submissionId} {

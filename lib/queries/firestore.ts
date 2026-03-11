@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteField,
   deleteDoc,
   doc,
   documentId,
@@ -29,12 +30,17 @@ import {
   RoadmapItem,
   RoadmapPriority,
   RoadmapQuarter,
+  StudyDistributionMode,
+  StudyInsights,
   StudyStatus,
   SurveyAnswer,
   SurveyQuestion,
   SurveyQuestionType,
   Study
 } from "@/types/app";
+
+export const SOLO_RESEARCH_TRIAL_DAYS = 14;
+export const SOLO_RESEARCH_TRIAL_MS = SOLO_RESEARCH_TRIAL_DAYS * 24 * 60 * 60 * 1000;
 
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = [];
@@ -135,9 +141,31 @@ function normalizeStudyStatus(value: unknown): StudyStatus {
   return value === "draft" ? "draft" : "published";
 }
 
+function normalizeStudyDistributionMode(value: unknown): StudyDistributionMode {
+  return value === "assigned" ? "assigned" : "open";
+}
+
 function normalizeNullableProjectId(value: unknown): string | null {
   if (typeof value === "string" && value.trim()) return value;
   return null;
+}
+
+function normalizeExpiresAt(value: unknown): number | undefined {
+  return toMillis(value);
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => String(entry).trim()).filter(Boolean);
+}
+
+export function isExpiredSoloStudy(
+  study: { expiresAt?: number | null; projectId: string | null | undefined },
+  now = Date.now()
+): boolean {
+  return !normalizeNullableProjectId(study.projectId) &&
+    typeof study.expiresAt === "number" &&
+    study.expiresAt <= now;
 }
 
 async function resolveOwnedProjectId(
@@ -209,19 +237,75 @@ function toStudy(studyDoc: { id: string; data: () => Record<string, unknown> }):
   const data = studyDoc.data();
   return {
     id: studyDoc.id,
-    projectId: String(data.projectId ?? ""),
+    projectId: normalizeNullableProjectId(data.projectId),
     ownerId: String(data.ownerId ?? ""),
     title: String(data.title ?? "Untitled study"),
     userSegment: String(data.userSegment ?? ""),
     budgetPerResponse:
       typeof data.budgetPerResponse === "number" ? data.budgetPerResponse : 0,
     surveyQuestions: normalizeSurveyQuestions(data.surveyQuestions),
-    helperIds: Array.isArray(data.helperIds)
-      ? data.helperIds.map((id) => String(id)).filter(Boolean)
-      : [],
+    distributionMode: normalizeStudyDistributionMode(data.distributionMode),
+    helperIds: normalizeStringArray(data.helperIds),
     status: normalizeStudyStatus(data.status),
-    createdAt: typeof data.createdAt === "number" ? data.createdAt : undefined
+    expiresAt: normalizeExpiresAt(data.expiresAt),
+    createdAt: toMillis(data.createdAt),
+    updatedAt: toMillis(data.updatedAt)
   };
+}
+
+function toActiveSurvey(surveyDoc: {
+  id: string;
+  data: () => Record<string, unknown>;
+}): ActiveSurvey {
+  const data = surveyDoc.data();
+  return {
+    id: surveyDoc.id,
+    studyId: String(data.studyId ?? surveyDoc.id),
+    projectId: normalizeNullableProjectId(data.projectId),
+    ownerId: String(data.ownerId ?? ""),
+    title: String(data.title ?? "Untitled survey"),
+    description: data.description ? String(data.description) : undefined,
+    userSegment: String(data.userSegment ?? ""),
+    status: normalizeStudyStatus(data.status),
+    distributionMode: normalizeStudyDistributionMode(data.distributionMode),
+    helperIds: normalizeStringArray(data.helperIds),
+    rewardAmount:
+      typeof data.rewardAmount === "number"
+        ? data.rewardAmount
+        : typeof data.budgetPerResponse === "number"
+          ? data.budgetPerResponse
+        : undefined,
+    surveyQuestions: normalizeSurveyQuestions(data.surveyQuestions),
+    expiresAt: normalizeExpiresAt(data.expiresAt),
+    createdAt: toMillis(data.createdAt),
+    updatedAt: toMillis(data.updatedAt)
+  };
+}
+
+function toStudyInsights(studyId: string, data: Record<string, unknown>): StudyInsights {
+  return {
+    studyId,
+    ownerId: String(data.ownerId ?? ""),
+    responseCountAtGeneration:
+      typeof data.responseCountAtGeneration === "number" ? data.responseCountAtGeneration : 0,
+    themes: normalizeStringArray(data.themes),
+    summary: String(data.summary ?? ""),
+    recommendations: normalizeStringArray(data.recommendations),
+    updatedAt: toMillis(data.updatedAt)
+  };
+}
+
+async function assertStudyOwnedByUser(studyId: string, ownerId: string) {
+  const db = requireDbClient();
+  const studyRef = doc(db, "studies", studyId);
+  const studySnap = await getDoc(studyRef);
+  if (!studySnap.exists()) {
+    throw new Error("This study no longer exists.");
+  }
+  if (String(studySnap.data().ownerId ?? "") !== ownerId) {
+    throw new Error("You cannot edit this study.");
+  }
+  return studySnap;
 }
 
 export async function getProjectsByOwner(ownerId: string): Promise<Project[]> {
@@ -252,15 +336,22 @@ export async function getStudiesByHelper(helperId: string): Promise<Study[]> {
     const db = requireDbClient();
     const normalizedHelperId = assertRequiredId(helperId, "helper user id while loading studies");
     const studiesRef = collection(db, "studies");
-    const studiesQuery = query(studiesRef, where("helperIds", "array-contains", normalizedHelperId));
+    const studiesQuery = query(
+      studiesRef,
+      where("status", "==", "published"),
+      where("distributionMode", "==", "assigned"),
+      where("helperIds", "array-contains", normalizedHelperId)
+    );
     const snapshot = await getDocs(studiesQuery);
 
-    return snapshot.docs.map((studyDoc) =>
-      toStudy({
-        id: studyDoc.id,
-        data: () => studyDoc.data() as Record<string, unknown>
-      })
-    );
+    return snapshot.docs
+      .map((studyDoc) =>
+        toStudy({
+          id: studyDoc.id,
+          data: () => studyDoc.data() as Record<string, unknown>
+        })
+      )
+      .filter((study) => !isExpiredSoloStudy(study));
   } catch (error) {
     handleFirestoreQueryError(error, "Could not load assigned studies.");
     throw error;
@@ -274,28 +365,76 @@ export async function getPublishedActiveSurveys(): Promise<ActiveSurvey[]> {
     const surveysQuery = query(surveysRef, where("status", "==", "published"));
     const snapshot = await getDocs(surveysQuery);
 
-    return snapshot.docs.map((surveyDoc) => {
-      const data = surveyDoc.data();
-      return {
-        id: surveyDoc.id,
-        studyId: String(data.studyId ?? surveyDoc.id),
-        projectId: String(data.projectId ?? ""),
-        ownerId: String(data.ownerId ?? ""),
-        title: String(data.title ?? "Untitled survey"),
-        description: data.description ? String(data.description) : undefined,
-        userSegment: String(data.userSegment ?? ""),
-        status: normalizeStudyStatus(data.status),
-        rewardAmount:
-          typeof data.rewardAmount === "number"
-            ? data.rewardAmount
-            : typeof data.budgetPerResponse === "number"
-              ? data.budgetPerResponse
-              : undefined,
-        surveyQuestions: normalizeSurveyQuestions(data.surveyQuestions)
-      };
-    });
+    return snapshot.docs
+      .map((surveyDoc) =>
+        toActiveSurvey({
+          id: surveyDoc.id,
+          data: () => surveyDoc.data() as Record<string, unknown>
+        })
+      )
+      .filter(
+        (survey) =>
+          survey.distributionMode === "open" &&
+          !isExpiredSoloStudy({ projectId: survey.projectId, expiresAt: survey.expiresAt })
+      );
   } catch (error) {
     handleFirestoreQueryError(error, "Could not load published surveys.");
+    throw error;
+  }
+}
+
+export async function getAvailableActiveSurveysByHelper(
+  helperId: string
+): Promise<ActiveSurvey[]> {
+  try {
+    const db = requireDbClient();
+    const normalizedHelperId = assertRequiredId(
+      helperId,
+      "helper user id while loading available surveys"
+    );
+    const surveysRef = collection(db, "active_surveys");
+    const [publishedSnapshot, assignedSnapshot] = await Promise.all([
+      getDocs(query(surveysRef, where("status", "==", "published"))),
+      getDocs(
+        query(
+          surveysRef,
+          where("status", "==", "published"),
+          where("distributionMode", "==", "assigned"),
+          where("helperIds", "array-contains", normalizedHelperId)
+        )
+      )
+    ]);
+
+    const surveys = new Map<string, ActiveSurvey>();
+    publishedSnapshot.docs.forEach((surveyDoc) => {
+      const survey = toActiveSurvey({
+        id: surveyDoc.id,
+        data: () => surveyDoc.data() as Record<string, unknown>
+      });
+      if (survey.distributionMode === "open") {
+        surveys.set(surveyDoc.id, survey);
+      }
+    });
+    assignedSnapshot.docs.forEach((surveyDoc) => {
+      surveys.set(
+        surveyDoc.id,
+        toActiveSurvey({
+          id: surveyDoc.id,
+          data: () => surveyDoc.data() as Record<string, unknown>
+        })
+      );
+    });
+
+    return Array.from(surveys.values())
+      .filter(
+        (survey) =>
+          !isExpiredSoloStudy({ projectId: survey.projectId, expiresAt: survey.expiresAt })
+      )
+      .sort(
+      (a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)
+      );
+  } catch (error) {
+    handleFirestoreQueryError(error, "Could not load helper surveys.");
     throw error;
   }
 }
@@ -308,12 +447,14 @@ export async function getStudiesByOwner(ownerId: string): Promise<Study[]> {
     const studiesQuery = query(studiesRef, where("ownerId", "==", normalizedOwnerId));
     const snapshot = await getDocs(studiesQuery);
 
-    return snapshot.docs.map((studyDoc) =>
-      toStudy({
-        id: studyDoc.id,
-        data: () => studyDoc.data() as Record<string, unknown>
-      })
-    );
+    return snapshot.docs
+      .map((studyDoc) =>
+        toStudy({
+          id: studyDoc.id,
+          data: () => studyDoc.data() as Record<string, unknown>
+        })
+      )
+      .filter((study) => !isExpiredSoloStudy(study));
   } catch (error) {
     handleFirestoreQueryError(error, "Could not load studies.");
     throw error;
@@ -338,62 +479,160 @@ export async function createProject(ownerId: string, name: string): Promise<stri
   }
 }
 
+export async function cleanupExpiredSoloStudies(ownerId: string): Promise<number> {
+  const db = requireDbClient();
+  const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while cleaning solo studies");
+  const studiesSnapshot = await getDocs(
+    query(collection(db, "studies"), where("ownerId", "==", normalizedOwnerId))
+  );
+
+  const expiredStudyIds = studiesSnapshot.docs
+    .map((studyDoc) =>
+      toStudy({
+        id: studyDoc.id,
+        data: () => studyDoc.data() as Record<string, unknown>
+      })
+    )
+    .filter((study) => isExpiredSoloStudy(study))
+    .map((study) => study.id);
+
+  if (!expiredStudyIds.length) return 0;
+
+  const submissionIds: string[] = [];
+  for (const batchStudyIds of chunkArray(expiredStudyIds, 10)) {
+    const submissionSnapshot = await getDocs(
+      query(collection(db, "submissions"), where("studyId", "in", batchStudyIds))
+    );
+    submissionIds.push(...submissionSnapshot.docs.map((docSnap) => docSnap.id));
+  }
+
+  await Promise.all([
+    deleteDocumentIdsInBatches("studies", expiredStudyIds),
+    deleteDocumentIdsInBatches("active_surveys", expiredStudyIds),
+    deleteDocumentIdsInBatches("study_insights", expiredStudyIds),
+    deleteDocumentIdsInBatches("submissions", submissionIds)
+  ]);
+
+  return expiredStudyIds.length;
+}
+
 type CreateStudyInput = {
-  projectId: string;
+  projectId: string | null;
   ownerId: string;
   title: string;
   userSegment: string;
   budgetPerResponse: number;
   surveyQuestions: SurveyQuestion[];
+  distributionMode?: StudyDistributionMode;
+  helperIds?: string[];
   status?: StudyStatus;
 };
 
-export async function createStudy(input: CreateStudyInput): Promise<void> {
+type SaveStudyInput = CreateStudyInput & {
+  studyId?: string;
+};
+
+export async function saveStudy(input: SaveStudyInput): Promise<string> {
   try {
     const db = requireDbClient();
-    const projectId = await assertOwnedProjectId(input.projectId, input.ownerId);
-    if (!projectId) {
-      throw new Error("Project is required.");
+    const normalizedOwnerId = assertRequiredId(input.ownerId, "PM user id while saving a study");
+    await cleanupExpiredSoloStudies(normalizedOwnerId);
+    const projectId = await assertOwnedProjectId(input.projectId, normalizedOwnerId);
+
+    const distributionMode = normalizeStudyDistributionMode(input.distributionMode);
+    const helperIds =
+      distributionMode === "assigned" ? normalizeStringArray(input.helperIds) : [];
+    const status = input.status ?? "draft";
+    const title = input.title.trim();
+    const userSegment = input.userSegment.trim();
+    const surveyQuestions = normalizeSurveyQuestions(input.surveyQuestions);
+
+    if (!title) {
+      throw new Error("Study title is required.");
+    }
+    if (!userSegment) {
+      throw new Error("User segment is required.");
+    }
+    if (input.budgetPerResponse <= 0) {
+      throw new Error("Budget per response must be greater than zero.");
+    }
+    if (!surveyQuestions.length) {
+      throw new Error("Add at least one research question.");
+    }
+    if (distributionMode === "assigned" && status === "published" && helperIds.length === 0) {
+      throw new Error("Assigned studies need at least one helper before publishing.");
     }
 
-    const studyRef = doc(collection(db, "studies"));
+    let studyRef = doc(collection(db, "studies"));
+    let existingExpiresAt: number | undefined;
+    if (input.studyId) {
+      const normalizedStudyId = assertRequiredId(input.studyId, "study id while saving a study");
+      const existingStudySnap = await assertStudyOwnedByUser(normalizedStudyId, normalizedOwnerId);
+      studyRef = doc(db, "studies", normalizedStudyId);
+      existingExpiresAt = normalizeExpiresAt(existingStudySnap.data().expiresAt);
+    }
+
     const surveyRef = doc(db, "active_surveys", studyRef.id);
     const now = serverTimestamp();
+    const soloExpiresAt =
+      !projectId ? existingExpiresAt ?? Date.now() + SOLO_RESEARCH_TRIAL_MS : undefined;
+    const expiryPayload =
+      !projectId
+        ? { expiresAt: soloExpiresAt }
+        : input.studyId && existingExpiresAt
+          ? { expiresAt: deleteField() }
+          : {};
     const write = writeBatch(db);
-    const status = input.status ?? "published";
 
     write.set(studyRef, {
       projectId,
-      ownerId: input.ownerId,
-      title: input.title,
-      userSegment: input.userSegment,
+      ownerId: normalizedOwnerId,
+      title,
+      userSegment,
       budgetPerResponse: input.budgetPerResponse,
-      surveyQuestions: input.surveyQuestions,
-      helperIds: [],
+      surveyQuestions,
+      distributionMode,
+      helperIds,
       status,
-      createdAt: now
-    });
+      ...expiryPayload,
+      updatedAt: now,
+      ...(input.studyId ? {} : { createdAt: now })
+    }, { merge: true });
 
     write.set(surveyRef, {
       studyId: studyRef.id,
       projectId,
-      ownerId: input.ownerId,
-      title: input.title,
-      description: `Audience: ${input.userSegment}`,
-      userSegment: input.userSegment,
-      surveyQuestions: input.surveyQuestions,
+      ownerId: normalizedOwnerId,
+      title,
+      description: `Audience: ${userSegment}`,
+      userSegment,
+      surveyQuestions,
       status,
+      distributionMode,
+      helperIds,
       rewardAmount: input.budgetPerResponse,
       budgetPerResponse: input.budgetPerResponse,
-      createdAt: now
-    });
+      ...expiryPayload,
+      updatedAt: now,
+      ...(input.studyId ? {} : { createdAt: now })
+    }, { merge: true });
 
     await write.commit();
-    toast.success("Study created.");
+    toast.success(status === "published" ? "Study saved and published." : "Study saved as draft.");
+    return studyRef.id;
   } catch (error) {
-    handleFirestoreQueryError(error, "Could not create study.");
+    handleFirestoreQueryError(error, "Could not save study.");
     throw error;
   }
+}
+
+export async function createStudy(input: CreateStudyInput): Promise<void> {
+  await saveStudy({
+    ...input,
+    distributionMode: input.distributionMode ?? "open",
+    helperIds: input.helperIds ?? [],
+    status: input.status ?? "draft"
+  });
 }
 
 export async function updateStudyStatus(
@@ -405,6 +644,7 @@ export async function updateStudyStatus(
     const db = requireDbClient();
     const normalizedStudyId = assertRequiredId(studyId, "study id while updating study status");
     const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while updating study status");
+    await assertStudyOwnedByUser(normalizedStudyId, normalizedOwnerId);
     const now = serverTimestamp();
     const write = writeBatch(db);
     write.set(
@@ -443,6 +683,30 @@ export async function createSubmission(
     const db = requireDbClient();
     const normalizedStudyId = assertRequiredId(studyId, "study id while submitting a study");
     const normalizedHelperId = assertRequiredId(helperId, "helper user id while submitting a study");
+    const surveySnap = await getDoc(doc(db, "active_surveys", normalizedStudyId));
+    if (!surveySnap.exists()) {
+      throw new Error("This study is no longer available.");
+    }
+
+    const surveyData = surveySnap.data();
+    if (
+      isExpiredSoloStudy({
+        projectId: normalizeNullableProjectId(surveyData.projectId),
+        expiresAt: normalizeExpiresAt(surveyData.expiresAt)
+      })
+    ) {
+      throw new Error("This study trial has expired.");
+    }
+    if (normalizeStudyStatus(surveyData.status) !== "published") {
+      throw new Error("This study is not open for responses yet.");
+    }
+
+    const distributionMode = normalizeStudyDistributionMode(surveyData.distributionMode);
+    const allowedHelperIds = normalizeStringArray(surveyData.helperIds);
+    if (distributionMode === "assigned" && !allowedHelperIds.includes(normalizedHelperId)) {
+      throw new Error("This study is not assigned to your helper account.");
+    }
+
     const submissionsRef = collection(db, "submissions");
     const existingSubmissionQuery = query(
       submissionsRef,
@@ -485,8 +749,11 @@ export async function getPmResearchSummary(
     if (!studies.length) {
       return {
         totalStudies: 0,
+        draftStudies: 0,
+        publishedStudies: 0,
         totalResponses: 0,
         pendingReview: 0,
+        latestInsightAt: undefined,
         studies: []
       };
     }
@@ -527,15 +794,33 @@ export async function getPmResearchSummary(
       return {
         studyId: study.id,
         title: study.title,
+        status: study.status,
+        distributionMode: study.distributionMode,
         responseCount: totals.responseCount,
         pendingReviewCount: totals.pendingReviewCount
       };
     });
 
+    const insightsSnapshot = await getDocs(
+      query(collection(db, "study_insights"), where("ownerId", "==", normalizedOwnerId))
+    );
+    const latestInsightAt = insightsSnapshot.docs.reduce<number | undefined>((latest, docSnap) => {
+      const insight = toStudyInsights(docSnap.id, docSnap.data() as Record<string, unknown>);
+      if (projectId !== undefined) {
+        const matchingStudy = studiesById.get(insight.studyId);
+        if (!matchingStudy) return latest;
+      }
+      if (insight.updatedAt === undefined) return latest;
+      return latest === undefined ? insight.updatedAt : Math.max(latest, insight.updatedAt);
+    }, undefined);
+
     return {
       totalStudies: studies.length,
+      draftStudies: studies.filter((study) => study.status === "draft").length,
+      publishedStudies: studies.filter((study) => study.status === "published").length,
       totalResponses: studySummaries.reduce((sum, item) => sum + item.responseCount, 0),
       pendingReview: studySummaries.reduce((sum, item) => sum + item.pendingReviewCount, 0),
+      latestInsightAt,
       studies: studySummaries
     };
   } catch (error) {
@@ -1369,6 +1654,7 @@ export async function deleteProjectCascade(
     await Promise.all([
       deleteDocumentIdsInBatches("studies", studyIds),
       deleteDocumentIdsInBatches("active_surveys", studyIds),
+      deleteDocumentIdsInBatches("study_insights", studyIds),
       deleteDocumentIdsInBatches("submissions", submissionIds),
       deleteDocumentIdsInBatches("prds", prdIds),
       deleteDocumentIdsInBatches("roadmap_items", roadmapItemIds),

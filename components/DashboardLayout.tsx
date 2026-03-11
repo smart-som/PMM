@@ -57,7 +57,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto grid min-h-screen w-full max-w-[1400px] grid-cols-1 md:grid-cols-[250px_1fr]">
-        <aside className="border-r border-border bg-surface p-5">
+        <aside className="border-r border-border bg-surface p-5 md:sticky md:top-0 md:self-start md:h-screen md:overflow-y-auto">
           <div className="mb-8">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               OrbitPlus

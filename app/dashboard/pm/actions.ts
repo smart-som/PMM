@@ -225,9 +225,11 @@ ${input.userSegment}
     userSegment,
     budgetPerResponse: input.budgetPerResponse,
     surveyQuestions: normalizedQuestions,
+    distributionMode: "open",
     helperIds: [],
     status,
-    createdAt: now
+    createdAt: now,
+    updatedAt: now
   });
 
   batch.set(surveyRef, {
@@ -239,9 +241,12 @@ ${input.userSegment}
     userSegment,
     surveyQuestions: normalizedQuestions,
     status,
+    distributionMode: "open",
+    helperIds: [],
     rewardAmount: input.budgetPerResponse,
     budgetPerResponse: input.budgetPerResponse,
-    createdAt: now
+    createdAt: now,
+    updatedAt: now
   });
 
   batch.set(

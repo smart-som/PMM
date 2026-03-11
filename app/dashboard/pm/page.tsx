@@ -141,7 +141,6 @@ export default function PMDashboardPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setIsStudyModalOpen(true)}
-                disabled={!hasProjects}
               >
                 Create Study
               </Button>
@@ -156,7 +155,7 @@ export default function PMDashboardPage() {
             </div>
             {!hasProjects && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Add a project first. Study creation and AI kickstart now require an existing project from your workspace.
+                Study creation supports independent research trials. AI kickstart still requires an existing project from your workspace.
               </p>
             )}
           </div>
