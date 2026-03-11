@@ -109,8 +109,10 @@ export async function generateProjectKickstart(
   input: KickstartInput
 ): Promise<KickstartResult> {
   const { uid } = await requirePmServerUser();
+  const adminDb = getAdminDb();
+  const normalizedProjectId = input.projectId.trim();
 
-  if (!input.projectId.trim()) {
+  if (!normalizedProjectId) {
     throw new Error("Project ID is required.");
   }
   if (!input.ideaPrompt.trim()) {
@@ -118,6 +120,11 @@ export async function generateProjectKickstart(
   }
   if (input.budgetPerResponse <= 0) {
     throw new Error("Budget per response must be greater than zero.");
+  }
+
+  const projectSnap = await adminDb.collection("projects").doc(normalizedProjectId).get();
+  if (!projectSnap.exists || String(projectSnap.data()?.ownerId ?? "") !== uid) {
+    throw new Error("Select a valid project from your workspace.");
   }
 
   const prompt = `
@@ -159,8 +166,8 @@ Rules:
 Idea prompt:
 ${input.ideaPrompt}
 
-Project ID:
-${input.projectId}
+  Project ID:
+  ${normalizedProjectId}
 
 Target user segment:
 ${input.userSegment}
@@ -204,16 +211,15 @@ ${input.userSegment}
         .slice(0, 8)
     : [];
 
-  const adminDb = getAdminDb();
   const status: StudyStatus = "draft";
   const studyRef = adminDb.collection("studies").doc();
   const surveyRef = adminDb.collection("active_surveys").doc(studyRef.id);
-  const prdRef = adminDb.collection("prds").doc(input.projectId);
+  const prdRef = adminDb.collection("prds").doc(normalizedProjectId);
   const batch = adminDb.batch();
   const now = new Date();
 
   batch.set(studyRef, {
-    projectId: input.projectId.trim(),
+    projectId: normalizedProjectId,
     ownerId: uid,
     title: studyTitle,
     userSegment,
@@ -226,7 +232,7 @@ ${input.userSegment}
 
   batch.set(surveyRef, {
     studyId: studyRef.id,
-    projectId: input.projectId.trim(),
+    projectId: normalizedProjectId,
     ownerId: uid,
     title: studyTitle,
     description: `Audience: ${userSegment}`,
@@ -241,7 +247,7 @@ ${input.userSegment}
   batch.set(
     prdRef,
     {
-      projectId: input.projectId.trim(),
+      projectId: normalizedProjectId,
       ownerId: uid,
       title: "Product Requirements Document",
       content: prdMarkdown,
@@ -254,7 +260,7 @@ ${input.userSegment}
     const itemRef = adminDb.collection("roadmap_items").doc();
     batch.set(itemRef, {
       ownerId: uid,
-      projectId: input.projectId.trim(),
+      projectId: normalizedProjectId,
       quarter: item.quarter,
       title: item.title,
       description: item.description,
@@ -266,7 +272,7 @@ ${input.userSegment}
   await batch.commit();
 
   return {
-    projectId: input.projectId.trim(),
+    projectId: normalizedProjectId,
     studyId: studyRef.id,
     prdId: prdRef.id,
     roadmapItemCount: roadmapItems.length,

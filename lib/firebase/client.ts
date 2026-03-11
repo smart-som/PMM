@@ -132,6 +132,14 @@ export function getFirebaseDb() {
   }
 }
 
+export function requireFirebaseDb(): Firestore {
+  const db = getFirebaseDb();
+  if (!db) {
+    throw new Error(FIREBASE_CLIENT_CONFIG_ERROR);
+  }
+  return db;
+}
+
 function createLazyFirebaseProxy<T extends object>(resolver: () => T | null): T {
   return new Proxy({} as T, {
     get(_, property) {
@@ -146,5 +154,6 @@ function createLazyFirebaseProxy<T extends object>(resolver: () => T | null): T 
   });
 }
 
+// Compatibility exports for any older call sites that still import app/db directly.
 export const app = createLazyFirebaseProxy<FirebaseApp>(getFirebaseApp);
 export const db = createLazyFirebaseProxy<Firestore>(getFirebaseDb);

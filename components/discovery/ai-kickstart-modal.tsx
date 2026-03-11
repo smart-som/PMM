@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { generateProjectKickstart } from "@/app/dashboard/pm/actions";
@@ -11,14 +11,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Project } from "@/types/app";
 
 type AiKickstartModalProps = {
   open: boolean;
   ownerId: string;
+  projects: Project[];
   onClose: () => void;
 };
 
-export function AiKickstartModal({ open, ownerId, onClose }: AiKickstartModalProps) {
+export function AiKickstartModal({ open, ownerId, projects, onClose }: AiKickstartModalProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [projectId, setProjectId] = useState("");
@@ -33,6 +35,12 @@ export function AiKickstartModal({ open, ownerId, onClose }: AiKickstartModalPro
       Number(budgetPerResponse) > 0,
     [budgetPerResponse, ideaPrompt, projectId]
   );
+
+  useEffect(() => {
+    if (!open) return;
+    if (projects.some((project) => project.id === projectId)) return;
+    setProjectId(projects[0]?.id ?? "");
+  }, [open, projectId, projects]);
 
   const kickstartMutation = useMutation({
     mutationFn: generateProjectKickstart,
@@ -84,13 +92,22 @@ export function AiKickstartModal({ open, ownerId, onClose }: AiKickstartModalPro
         <CardContent>
           <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-2">
-              <Label htmlFor="kickstart-project-id">Project ID</Label>
-              <Input
+              <Label htmlFor="kickstart-project-id">Project</Label>
+              <select
                 id="kickstart-project-id"
-                placeholder="project_alpha"
                 value={projectId}
                 onChange={(event) => setProjectId(event.target.value)}
-              />
+                className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="" disabled>
+                  Select a project
+                </option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">

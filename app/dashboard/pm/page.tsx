@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 
+import { AiKickstartModal } from "@/components/discovery/ai-kickstart-modal";
+import { NewStudyModal } from "@/components/discovery/new-study-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -43,6 +45,8 @@ export default function PMDashboardPage() {
   const [projectName, setProjectName] = useState("");
   const [deleteState, setDeleteState] = useState<ProjectDeleteState>(null);
   const [typedDeleteName, setTypedDeleteName] = useState("");
+  const [isStudyModalOpen, setIsStudyModalOpen] = useState(false);
+  const [isKickstartModalOpen, setIsKickstartModalOpen] = useState(false);
 
   const createProjectMutation = useMutation({
     mutationFn: (name: string) => createProject(user!.uid, name),
@@ -76,6 +80,7 @@ export default function PMDashboardPage() {
     () => projectName.trim().length > 1 && !createProjectMutation.isPending,
     [createProjectMutation.isPending, projectName]
   );
+  const hasProjects = Boolean(projectsQuery.data?.length);
 
   function onCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,6 +132,33 @@ export default function PMDashboardPage() {
                 </Link>
               ))}
             </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-foreground">Project setup</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsStudyModalOpen(true)}
+                disabled={!hasProjects}
+              >
+                Create Study
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsKickstartModalOpen(true)}
+                disabled={!hasProjects}
+              >
+                AI Kickstart
+              </Button>
+            </div>
+            {!hasProjects && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Add a project first. Study creation and AI kickstart now require an existing project from your workspace.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -234,6 +266,23 @@ export default function PMDashboardPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {user && (
+        <>
+          <NewStudyModal
+            open={isStudyModalOpen}
+            ownerId={user.uid}
+            projects={projectsQuery.data ?? []}
+            onClose={() => setIsStudyModalOpen(false)}
+          />
+          <AiKickstartModal
+            open={isKickstartModalOpen}
+            ownerId={user.uid}
+            projects={projectsQuery.data ?? []}
+            onClose={() => setIsKickstartModalOpen(false)}
+          />
+        </>
       )}
     </main>
   );

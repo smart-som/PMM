@@ -14,7 +14,7 @@ import {
 } from "firebase/firestore";
 import { toast } from "sonner";
 
-import { db } from "@/lib/firebase/client";
+import { requireFirebaseDb } from "@/lib/firebase/client";
 import {
   ActiveSurvey,
   AnalyticsReport,
@@ -64,11 +64,34 @@ function getFirebaseErrorCode(error: unknown): string | null {
   return typeof code === "string" ? code : null;
 }
 
+function requireDbClient() {
+  return requireFirebaseDb();
+}
+
+function assertRequiredId(value: string | null | undefined, context: string) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) {
+    throw new Error(`Missing ${context}.`);
+  }
+  return normalized;
+}
+
 function handleFirestoreQueryError(error: unknown, fallbackMessage: string) {
   const code = getFirebaseErrorCode(error);
+  if (process.env.NODE_ENV !== "production") {
+    console.error(`[firestore] ${fallbackMessage}`, error);
+  }
+
   if (code === "permission-denied") {
     toast.error(
       `${fallbackMessage} Firestore permission denied. Verify/deploy firestore.rules and confirm ownerId == request.auth.uid for this document.`
+    );
+    return;
+  }
+
+  if (code === "invalid-argument") {
+    toast.error(
+      `${fallbackMessage} Firestore received invalid query/input arguments. Verify required ids and client initialization.`
     );
     return;
   }
@@ -93,6 +116,7 @@ async function deleteDocumentIdsInBatches(
   ids: string[]
 ): Promise<void> {
   if (!ids.length) return;
+  const db = requireDbClient();
 
   for (const batchIds of chunkArray(ids, 400)) {
     const write = writeBatch(db);
@@ -114,6 +138,32 @@ function normalizeStudyStatus(value: unknown): StudyStatus {
 function normalizeNullableProjectId(value: unknown): string | null {
   if (typeof value === "string" && value.trim()) return value;
   return null;
+}
+
+async function resolveOwnedProjectId(
+  projectId: string | null | undefined,
+  ownerId: string
+): Promise<string | null> {
+  const normalizedProjectId = normalizeNullableProjectId(projectId);
+  if (!normalizedProjectId) return null;
+  const db = requireDbClient();
+
+  const projectSnap = await getDoc(doc(db, "projects", normalizedProjectId));
+  if (!projectSnap.exists()) return null;
+  if (String(projectSnap.data().ownerId ?? "") !== ownerId) return null;
+  return normalizedProjectId;
+}
+
+async function assertOwnedProjectId(
+  projectId: string | null | undefined,
+  ownerId: string
+): Promise<string | null> {
+  const normalizedProjectId = normalizeNullableProjectId(projectId);
+  const resolvedProjectId = await resolveOwnedProjectId(normalizedProjectId, ownerId);
+  if (normalizedProjectId && !resolvedProjectId) {
+    throw new Error("Select a valid project from your workspace.");
+  }
+  return resolvedProjectId;
 }
 
 function normalizeSurveyQuestions(value: unknown): SurveyQuestion[] {
@@ -176,15 +226,17 @@ function toStudy(studyDoc: { id: string; data: () => Record<string, unknown> }):
 
 export async function getProjectsByOwner(ownerId: string): Promise<Project[]> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while loading projects");
     const projectsRef = collection(db, "projects");
-    const projectsQuery = query(projectsRef, where("ownerId", "==", ownerId));
+    const projectsQuery = query(projectsRef, where("ownerId", "==", normalizedOwnerId));
     const snapshot = await getDocs(projectsQuery);
 
     return snapshot.docs.map((projectDoc) => {
       const data = projectDoc.data();
       return {
         id: projectDoc.id,
-        ownerId: String(data.ownerId ?? ownerId),
+        ownerId: String(data.ownerId ?? normalizedOwnerId),
         name: String(data.name ?? "Untitled project"),
         createdAt: toMillis(data.createdAt)
       } satisfies Project;
@@ -197,8 +249,10 @@ export async function getProjectsByOwner(ownerId: string): Promise<Project[]> {
 
 export async function getStudiesByHelper(helperId: string): Promise<Study[]> {
   try {
+    const db = requireDbClient();
+    const normalizedHelperId = assertRequiredId(helperId, "helper user id while loading studies");
     const studiesRef = collection(db, "studies");
-    const studiesQuery = query(studiesRef, where("helperIds", "array-contains", helperId));
+    const studiesQuery = query(studiesRef, where("helperIds", "array-contains", normalizedHelperId));
     const snapshot = await getDocs(studiesQuery);
 
     return snapshot.docs.map((studyDoc) =>
@@ -215,6 +269,7 @@ export async function getStudiesByHelper(helperId: string): Promise<Study[]> {
 
 export async function getPublishedActiveSurveys(): Promise<ActiveSurvey[]> {
   try {
+    const db = requireDbClient();
     const surveysRef = collection(db, "active_surveys");
     const surveysQuery = query(surveysRef, where("status", "==", "published"));
     const snapshot = await getDocs(surveysQuery);
@@ -247,8 +302,10 @@ export async function getPublishedActiveSurveys(): Promise<ActiveSurvey[]> {
 
 export async function getStudiesByOwner(ownerId: string): Promise<Study[]> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while loading studies");
     const studiesRef = collection(db, "studies");
-    const studiesQuery = query(studiesRef, where("ownerId", "==", ownerId));
+    const studiesQuery = query(studiesRef, where("ownerId", "==", normalizedOwnerId));
     const snapshot = await getDocs(studiesQuery);
 
     return snapshot.docs.map((studyDoc) =>
@@ -265,9 +322,11 @@ export async function getStudiesByOwner(ownerId: string): Promise<Study[]> {
 
 export async function createProject(ownerId: string, name: string): Promise<string> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while creating a project");
     const projectsRef = collection(db, "projects");
     const projectDoc = await addDoc(projectsRef, {
-      ownerId,
+      ownerId: normalizedOwnerId,
       name,
       createdAt: serverTimestamp()
     });
@@ -291,6 +350,12 @@ type CreateStudyInput = {
 
 export async function createStudy(input: CreateStudyInput): Promise<void> {
   try {
+    const db = requireDbClient();
+    const projectId = await assertOwnedProjectId(input.projectId, input.ownerId);
+    if (!projectId) {
+      throw new Error("Project is required.");
+    }
+
     const studyRef = doc(collection(db, "studies"));
     const surveyRef = doc(db, "active_surveys", studyRef.id);
     const now = serverTimestamp();
@@ -298,7 +363,7 @@ export async function createStudy(input: CreateStudyInput): Promise<void> {
     const status = input.status ?? "published";
 
     write.set(studyRef, {
-      projectId: input.projectId,
+      projectId,
       ownerId: input.ownerId,
       title: input.title,
       userSegment: input.userSegment,
@@ -311,7 +376,7 @@ export async function createStudy(input: CreateStudyInput): Promise<void> {
 
     write.set(surveyRef, {
       studyId: studyRef.id,
-      projectId: input.projectId,
+      projectId,
       ownerId: input.ownerId,
       title: input.title,
       description: `Audience: ${input.userSegment}`,
@@ -337,21 +402,24 @@ export async function updateStudyStatus(
   status: StudyStatus
 ): Promise<void> {
   try {
+    const db = requireDbClient();
+    const normalizedStudyId = assertRequiredId(studyId, "study id while updating study status");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while updating study status");
     const now = serverTimestamp();
     const write = writeBatch(db);
     write.set(
-      doc(db, "studies", studyId),
+      doc(db, "studies", normalizedStudyId),
       {
-        ownerId,
+        ownerId: normalizedOwnerId,
         status,
         updatedAt: now
       },
       { merge: true }
     );
     write.set(
-      doc(db, "active_surveys", studyId),
+      doc(db, "active_surveys", normalizedStudyId),
       {
-        ownerId,
+        ownerId: normalizedOwnerId,
         status,
         updatedAt: now
       },
@@ -372,11 +440,14 @@ export async function createSubmission(
   responseSummary = ""
 ): Promise<void> {
   try {
+    const db = requireDbClient();
+    const normalizedStudyId = assertRequiredId(studyId, "study id while submitting a study");
+    const normalizedHelperId = assertRequiredId(helperId, "helper user id while submitting a study");
     const submissionsRef = collection(db, "submissions");
     const existingSubmissionQuery = query(
       submissionsRef,
-      where("studyId", "==", studyId),
-      where("helperId", "==", helperId)
+      where("studyId", "==", normalizedStudyId),
+      where("helperId", "==", normalizedHelperId)
     );
     const existingSnapshot = await getDocs(existingSubmissionQuery);
     if (!existingSnapshot.empty) {
@@ -385,8 +456,8 @@ export async function createSubmission(
     }
 
     await addDoc(submissionsRef, {
-      studyId,
-      helperId,
+      studyId: normalizedStudyId,
+      helperId: normalizedHelperId,
       answers,
       responseSummary,
       status: "pending_review",
@@ -404,7 +475,9 @@ export async function getPmResearchSummary(
   projectId?: string | null
 ): Promise<PMResearchSummary> {
   try {
-    const studies = (await getStudiesByOwner(ownerId)).filter((study) => {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while loading research summary");
+    const studies = (await getStudiesByOwner(normalizedOwnerId)).filter((study) => {
       if (projectId === undefined) return true;
       if (projectId === null) return !study.projectId;
       return study.projectId === projectId;
@@ -475,8 +548,10 @@ export async function getHelperEarningsSummary(
   helperId: string
 ): Promise<HelperEarningsSummary> {
   try {
+    const db = requireDbClient();
+    const normalizedHelperId = assertRequiredId(helperId, "helper user id while loading earnings");
     const submissionsRef = collection(db, "submissions");
-    const submissionsQuery = query(submissionsRef, where("helperId", "==", helperId));
+    const submissionsQuery = query(submissionsRef, where("helperId", "==", normalizedHelperId));
     const submissionsSnap = await getDocs(submissionsQuery);
 
     if (submissionsSnap.empty) {
@@ -545,7 +620,9 @@ export async function getHelperEarningsSummary(
 
 export async function getHelperProfile(helperId: string): Promise<HelperProfile> {
   try {
-    const userDoc = await getDoc(doc(db, "users", helperId));
+    const db = requireDbClient();
+    const normalizedHelperId = assertRequiredId(helperId, "helper user id while loading profile");
+    const userDoc = await getDoc(doc(db, "users", normalizedHelperId));
     const data = userDoc.data();
 
     return {
@@ -564,8 +641,10 @@ export async function updateHelperProfile(
   profile: HelperProfile
 ): Promise<void> {
   try {
+    const db = requireDbClient();
+    const normalizedHelperId = assertRequiredId(helperId, "helper user id while updating profile");
     await setDoc(
-      doc(db, "users", helperId),
+      doc(db, "users", normalizedHelperId),
       {
         displayName: profile.displayName,
         expertise: profile.expertise,
@@ -586,25 +665,29 @@ export async function getOrCreatePrdDocument(
   ownerId: string
 ): Promise<PrdDocument> {
   try {
-    const prdRef = doc(db, "prds", prdId);
+    const db = requireDbClient();
+    const normalizedPrdId = assertRequiredId(prdId, "PRD id while loading PRD");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while loading PRD");
+    const prdRef = doc(db, "prds", normalizedPrdId);
     const prdSnap = await getDoc(prdRef);
+    const inferredProjectId = await resolveOwnedProjectId(normalizedPrdId, normalizedOwnerId);
 
     if (!prdSnap.exists()) {
       const newDocument: Omit<PrdDocument, "id"> = {
-        projectId: prdId,
-        ownerId,
+        projectId: inferredProjectId,
+        ownerId: normalizedOwnerId,
         title: "Product Requirements Document",
         content: ""
       };
       await setDoc(prdRef, { ...newDocument, updatedAt: serverTimestamp() });
-      return { id: prdId, ...newDocument };
+      return { id: normalizedPrdId, ...newDocument };
     }
 
     const data = prdSnap.data();
     return {
       id: prdSnap.id,
-      ownerId: String(data.ownerId ?? ownerId),
-      projectId: normalizeNullableProjectId(data.projectId) ?? prdSnap.id,
+      ownerId: String(data.ownerId ?? normalizedOwnerId),
+      projectId: normalizeNullableProjectId(data.projectId) ?? inferredProjectId,
       title: String(data.title ?? "Product Requirements Document"),
       content: String(data.content ?? ""),
       impactScore: typeof data.impactScore === "number" ? data.impactScore : undefined,
@@ -626,10 +709,13 @@ export async function createPrdDocument(
   title = "Product Requirements Document"
 ): Promise<string> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while creating PRD");
+    const resolvedProjectId = await assertOwnedProjectId(projectId, normalizedOwnerId);
     const prdRef = doc(collection(db, "prds"));
     await setDoc(prdRef, {
-      ownerId,
-      projectId,
+      ownerId: normalizedOwnerId,
+      projectId: resolvedProjectId,
       title,
       content: "",
       updatedAt: serverTimestamp()
@@ -649,15 +735,25 @@ export async function savePrdContent(
   projectId?: string | null
 ): Promise<void> {
   try {
-    const prdRef = doc(db, "prds", prdId);
+    const db = requireDbClient();
+    const normalizedPrdId = assertRequiredId(prdId, "PRD id while saving PRD");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while saving PRD");
+    const prdRef = doc(db, "prds", normalizedPrdId);
+    const prdSnap = await getDoc(prdRef);
+    if (prdSnap.exists() && String(prdSnap.data().ownerId ?? normalizedOwnerId) !== normalizedOwnerId) {
+      throw new Error("You cannot edit this PRD.");
+    }
+
     const payload: Record<string, unknown> = {
-      ownerId,
-      title: "Product Requirements Document",
+      ownerId: normalizedOwnerId,
+      title: prdSnap.exists()
+        ? String(prdSnap.data().title ?? "Product Requirements Document")
+        : "Product Requirements Document",
       content,
       updatedAt: serverTimestamp()
     };
     if (projectId !== undefined) {
-      payload.projectId = projectId;
+      payload.projectId = await assertOwnedProjectId(projectId, normalizedOwnerId);
     }
 
     await setDoc(
@@ -674,15 +770,17 @@ export async function savePrdContent(
 
 export async function getPrdsByOwner(ownerId: string): Promise<PrdDocument[]> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while loading PRDs");
     const prdsRef = collection(db, "prds");
-    const prdsQuery = query(prdsRef, where("ownerId", "==", ownerId));
+    const prdsQuery = query(prdsRef, where("ownerId", "==", normalizedOwnerId));
     const snapshot = await getDocs(prdsQuery);
 
     return snapshot.docs.map((prdDoc) => {
       const data = prdDoc.data();
       return {
         id: prdDoc.id,
-        ownerId: String(data.ownerId ?? ownerId),
+        ownerId: String(data.ownerId ?? normalizedOwnerId),
         projectId: normalizeNullableProjectId(data.projectId),
         title: String(data.title ?? "Product Requirements Document"),
         content: String(data.content ?? ""),
@@ -702,11 +800,14 @@ export async function getPrdsByOwner(ownerId: string): Promise<PrdDocument[]> {
 
 export async function deletePrdDocument(prdId: string, ownerId: string): Promise<void> {
   try {
-    const prdRef = doc(db, "prds", prdId);
+    const db = requireDbClient();
+    const normalizedPrdId = assertRequiredId(prdId, "PRD id while deleting PRD");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while deleting PRD");
+    const prdRef = doc(db, "prds", normalizedPrdId);
     const prdSnap = await getDoc(prdRef);
     if (!prdSnap.exists()) return;
 
-    if (String(prdSnap.data().ownerId ?? "") !== ownerId) {
+    if (String(prdSnap.data().ownerId ?? "") !== normalizedOwnerId) {
       throw new Error("You cannot delete this PRD.");
     }
 
@@ -724,11 +825,21 @@ export async function updatePrdLaunchQuarter(
   quarter: RoadmapQuarter
 ): Promise<void> {
   try {
-    const prdRef = doc(db, "prds", prdId);
+    const db = requireDbClient();
+    const normalizedPrdId = assertRequiredId(prdId, "PRD id while updating roadmap quarter");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while updating roadmap quarter");
+    const prdRef = doc(db, "prds", normalizedPrdId);
+    const prdSnap = await getDoc(prdRef);
+    if (!prdSnap.exists()) {
+      throw new Error("This PRD no longer exists.");
+    }
+    if (String(prdSnap.data().ownerId ?? "") !== normalizedOwnerId) {
+      throw new Error("You cannot edit this PRD.");
+    }
     await setDoc(
       prdRef,
       {
-        ownerId,
+        ownerId: normalizedOwnerId,
         targetLaunchQuarter: quarter,
         updatedAt: serverTimestamp()
       },
@@ -748,10 +859,13 @@ export async function createRoadmapPlaceholderPrd(
   projectId: string | null = null
 ): Promise<void> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while creating roadmap placeholder");
+    const resolvedProjectId = await assertOwnedProjectId(projectId, normalizedOwnerId);
     const prdRef = doc(collection(db, "prds"));
     await setDoc(prdRef, {
-      ownerId,
-      projectId,
+      ownerId: normalizedOwnerId,
+      projectId: resolvedProjectId,
       title,
       content: "Placeholder idea generated by AI strategy prompt.",
       targetLaunchQuarter: quarter,
@@ -779,10 +893,13 @@ export async function createRoadmapItem(
   input: CreateRoadmapItemInput
 ): Promise<void> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(input.ownerId, "PM user id while creating roadmap item");
+    const projectId = await assertOwnedProjectId(input.projectId, normalizedOwnerId);
     const roadmapItemsRef = collection(db, "roadmap_items");
     await addDoc(roadmapItemsRef, {
-      ownerId: input.ownerId,
-      projectId: input.projectId,
+      ownerId: normalizedOwnerId,
+      projectId,
       quarter: input.quarter,
       title: input.title,
       description: input.description,
@@ -800,13 +917,15 @@ export async function getRoadmapItemsByOwner(
   ownerId: string
 ): Promise<RoadmapItem[]> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while loading roadmap items");
     const roadmapItemsRef = collection(db, "roadmap_items");
-    const roadmapItemsQuery = query(roadmapItemsRef, where("ownerId", "==", ownerId));
+    const roadmapItemsQuery = query(roadmapItemsRef, where("ownerId", "==", normalizedOwnerId));
     const snapshot = await getDocs(roadmapItemsQuery);
 
     return snapshot.docs.map((itemDoc) => ({
       id: itemDoc.id,
-      ownerId: String(itemDoc.data().ownerId ?? ownerId),
+      ownerId: String(itemDoc.data().ownerId ?? normalizedOwnerId),
       projectId: normalizeNullableProjectId(itemDoc.data().projectId),
       quarter: String(itemDoc.data().quarter ?? "Q1") as RoadmapQuarter,
       title: String(itemDoc.data().title ?? "Untitled item"),
@@ -825,11 +944,14 @@ export async function getRoadmapItemsByOwner(
 
 export async function deleteRoadmapItem(itemId: string, ownerId: string): Promise<void> {
   try {
-    const itemRef = doc(db, "roadmap_items", itemId);
+    const db = requireDbClient();
+    const normalizedItemId = assertRequiredId(itemId, "roadmap item id while deleting roadmap item");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while deleting roadmap item");
+    const itemRef = doc(db, "roadmap_items", normalizedItemId);
     const itemSnap = await getDoc(itemRef);
     if (!itemSnap.exists()) return;
 
-    if (String(itemSnap.data().ownerId ?? "") !== ownerId) {
+    if (String(itemSnap.data().ownerId ?? "") !== normalizedOwnerId) {
       throw new Error("You cannot delete this roadmap item.");
     }
 
@@ -853,15 +975,17 @@ export async function getPmResearchSessionsByOwner(
   ownerId: string
 ): Promise<PmResearchSession[]> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while loading research sessions");
     const ref = collection(db, "pm_research_sessions");
-    const q = query(ref, where("ownerId", "==", ownerId));
+    const q = query(ref, where("ownerId", "==", normalizedOwnerId));
     const snapshot = await getDocs(q);
 
     return snapshot.docs.map((item) => {
       const data = item.data();
       return {
         id: item.id,
-        ownerId: String(data.ownerId ?? ownerId),
+        ownerId: String(data.ownerId ?? normalizedOwnerId),
         projectId: normalizeNullableProjectId(data.projectId),
         title: String(data.title ?? "Untitled session"),
         notes: String(data.notes ?? ""),
@@ -880,10 +1004,13 @@ export async function createPmResearchSession(
   input: CreatePmResearchSessionInput
 ): Promise<void> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(input.ownerId, "PM user id while saving research session");
+    const projectId = await assertOwnedProjectId(input.projectId, normalizedOwnerId);
     const ref = collection(db, "pm_research_sessions");
     await addDoc(ref, {
-      ownerId: input.ownerId,
-      projectId: input.projectId,
+      ownerId: normalizedOwnerId,
+      projectId,
       title: input.title,
       notes: input.notes,
       insights: input.insights,
@@ -902,11 +1029,14 @@ export async function deletePmResearchSession(
   ownerId: string
 ): Promise<void> {
   try {
-    const ref = doc(db, "pm_research_sessions", sessionId);
+    const db = requireDbClient();
+    const normalizedSessionId = assertRequiredId(sessionId, "research session id while deleting research session");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while deleting research session");
+    const ref = doc(db, "pm_research_sessions", normalizedSessionId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return;
 
-    if (String(snap.data().ownerId ?? "") !== ownerId) {
+    if (String(snap.data().ownerId ?? "") !== normalizedOwnerId) {
       throw new Error("You cannot delete this research session.");
     }
 
@@ -930,15 +1060,17 @@ export async function getAnalyticsReportsByOwner(
   ownerId: string
 ): Promise<AnalyticsReport[]> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while loading analytics reports");
     const ref = collection(db, "analytics_reports");
-    const q = query(ref, where("ownerId", "==", ownerId));
+    const q = query(ref, where("ownerId", "==", normalizedOwnerId));
     const snapshot = await getDocs(q);
 
     return snapshot.docs.map((item) => {
       const data = item.data();
       return {
         id: item.id,
-        ownerId: String(data.ownerId ?? ownerId),
+        ownerId: String(data.ownerId ?? normalizedOwnerId),
         projectId: normalizeNullableProjectId(data.projectId),
         title: String(data.title ?? "Untitled report"),
         summary: String(data.summary ?? ""),
@@ -957,10 +1089,13 @@ export async function createAnalyticsReport(
   input: CreateAnalyticsReportInput
 ): Promise<void> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(input.ownerId, "PM user id while saving analytics report");
+    const projectId = await assertOwnedProjectId(input.projectId, normalizedOwnerId);
     const ref = collection(db, "analytics_reports");
     await addDoc(ref, {
-      ownerId: input.ownerId,
-      projectId: input.projectId,
+      ownerId: normalizedOwnerId,
+      projectId,
       title: input.title,
       summary: input.summary,
       metrics: input.metrics,
@@ -979,11 +1114,14 @@ export async function deleteAnalyticsReport(
   ownerId: string
 ): Promise<void> {
   try {
-    const ref = doc(db, "analytics_reports", reportId);
+    const db = requireDbClient();
+    const normalizedReportId = assertRequiredId(reportId, "analytics report id while deleting analytics report");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while deleting analytics report");
+    const ref = doc(db, "analytics_reports", normalizedReportId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return;
 
-    if (String(snap.data().ownerId ?? "") !== ownerId) {
+    if (String(snap.data().ownerId ?? "") !== normalizedOwnerId) {
       throw new Error("You cannot delete this report.");
     }
 
@@ -1006,15 +1144,17 @@ type CreateJourneyMapInput = {
 
 export async function getJourneyMapsByOwner(ownerId: string): Promise<JourneyMap[]> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while loading journey maps");
     const ref = collection(db, "journey_maps");
-    const q = query(ref, where("ownerId", "==", ownerId));
+    const q = query(ref, where("ownerId", "==", normalizedOwnerId));
     const snapshot = await getDocs(q);
 
     return snapshot.docs.map((item) => {
       const data = item.data();
       return {
         id: item.id,
-        ownerId: String(data.ownerId ?? ownerId),
+        ownerId: String(data.ownerId ?? normalizedOwnerId),
         projectId: normalizeNullableProjectId(data.projectId),
         title: String(data.title ?? "Untitled journey map"),
         stages: String(data.stages ?? ""),
@@ -1032,10 +1172,13 @@ export async function getJourneyMapsByOwner(ownerId: string): Promise<JourneyMap
 
 export async function createJourneyMap(input: CreateJourneyMapInput): Promise<void> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(input.ownerId, "PM user id while saving journey map");
+    const projectId = await assertOwnedProjectId(input.projectId, normalizedOwnerId);
     const ref = collection(db, "journey_maps");
     await addDoc(ref, {
-      ownerId: input.ownerId,
-      projectId: input.projectId,
+      ownerId: normalizedOwnerId,
+      projectId,
       title: input.title,
       stages: input.stages,
       painPoints: input.painPoints,
@@ -1052,11 +1195,14 @@ export async function createJourneyMap(input: CreateJourneyMapInput): Promise<vo
 
 export async function deleteJourneyMap(mapId: string, ownerId: string): Promise<void> {
   try {
-    const ref = doc(db, "journey_maps", mapId);
+    const db = requireDbClient();
+    const normalizedMapId = assertRequiredId(mapId, "journey map id while deleting journey map");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while deleting journey map");
+    const ref = doc(db, "journey_maps", normalizedMapId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return;
 
-    if (String(snap.data().ownerId ?? "") !== ownerId) {
+    if (String(snap.data().ownerId ?? "") !== normalizedOwnerId) {
       throw new Error("You cannot delete this journey map.");
     }
 
@@ -1083,8 +1229,10 @@ export async function getAbTestExperimentsByOwner(
   ownerId: string
 ): Promise<AbTestExperiment[]> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while loading A/B tests");
     const ref = collection(db, "ab_tests");
-    const q = query(ref, where("ownerId", "==", ownerId));
+    const q = query(ref, where("ownerId", "==", normalizedOwnerId));
     const snapshot = await getDocs(q);
 
     return snapshot.docs.map((item) => {
@@ -1094,7 +1242,7 @@ export async function getAbTestExperimentsByOwner(
 
       return {
         id: item.id,
-        ownerId: String(data.ownerId ?? ownerId),
+        ownerId: String(data.ownerId ?? normalizedOwnerId),
         projectId: normalizeNullableProjectId(data.projectId),
         title: String(data.title ?? "Untitled A/B test"),
         hypothesis: String(data.hypothesis ?? ""),
@@ -1116,10 +1264,13 @@ export async function createAbTestExperiment(
   input: CreateAbTestExperimentInput
 ): Promise<void> {
   try {
+    const db = requireDbClient();
+    const normalizedOwnerId = assertRequiredId(input.ownerId, "PM user id while saving A/B test");
+    const projectId = await assertOwnedProjectId(input.projectId, normalizedOwnerId);
     const ref = collection(db, "ab_tests");
     await addDoc(ref, {
-      ownerId: input.ownerId,
-      projectId: input.projectId,
+      ownerId: normalizedOwnerId,
+      projectId,
       title: input.title,
       hypothesis: input.hypothesis,
       variantA: input.variantA,
@@ -1141,11 +1292,14 @@ export async function deleteAbTestExperiment(
   ownerId: string
 ): Promise<void> {
   try {
-    const ref = doc(db, "ab_tests", experimentId);
+    const db = requireDbClient();
+    const normalizedExperimentId = assertRequiredId(experimentId, "A/B test id while deleting A/B test");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while deleting A/B test");
+    const ref = doc(db, "ab_tests", normalizedExperimentId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return;
 
-    if (String(snap.data().ownerId ?? "") !== ownerId) {
+    if (String(snap.data().ownerId ?? "") !== normalizedOwnerId) {
       throw new Error("You cannot delete this A/B test.");
     }
 
@@ -1162,6 +1316,7 @@ async function getOwnedProjectArtifactIds(
   ownerId: string,
   projectId: string
 ): Promise<string[]> {
+  const db = requireDbClient();
   const ref = collection(db, collectionName);
   const q = query(ref, where("ownerId", "==", ownerId), where("projectId", "==", projectId));
   const snapshot = await getDocs(q);
@@ -1173,19 +1328,22 @@ export async function deleteProjectCascade(
   ownerId: string
 ): Promise<void> {
   try {
-    const projectRef = doc(db, "projects", projectId);
+    const db = requireDbClient();
+    const normalizedProjectId = assertRequiredId(projectId, "project id while deleting project");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while deleting project");
+    const projectRef = doc(db, "projects", normalizedProjectId);
     const projectSnap = await getDoc(projectRef);
     if (!projectSnap.exists()) return;
 
-    if (String(projectSnap.data().ownerId ?? "") !== ownerId) {
+    if (String(projectSnap.data().ownerId ?? "") !== normalizedOwnerId) {
       throw new Error("You cannot delete this project.");
     }
 
     const studySnapshot = await getDocs(
       query(
         collection(db, "studies"),
-        where("ownerId", "==", ownerId),
-        where("projectId", "==", projectId)
+        where("ownerId", "==", normalizedOwnerId),
+        where("projectId", "==", normalizedProjectId)
       )
     );
     const studyIds = studySnapshot.docs.map((item) => item.id);
@@ -1200,12 +1358,12 @@ export async function deleteProjectCascade(
 
     const [prdIds, roadmapItemIds, analyticsIds, journeyIds, abTestIds, researchSessionIds] =
       await Promise.all([
-        getOwnedProjectArtifactIds("prds", ownerId, projectId),
-        getOwnedProjectArtifactIds("roadmap_items", ownerId, projectId),
-        getOwnedProjectArtifactIds("analytics_reports", ownerId, projectId),
-        getOwnedProjectArtifactIds("journey_maps", ownerId, projectId),
-        getOwnedProjectArtifactIds("ab_tests", ownerId, projectId),
-        getOwnedProjectArtifactIds("pm_research_sessions", ownerId, projectId)
+        getOwnedProjectArtifactIds("prds", normalizedOwnerId, normalizedProjectId),
+        getOwnedProjectArtifactIds("roadmap_items", normalizedOwnerId, normalizedProjectId),
+        getOwnedProjectArtifactIds("analytics_reports", normalizedOwnerId, normalizedProjectId),
+        getOwnedProjectArtifactIds("journey_maps", normalizedOwnerId, normalizedProjectId),
+        getOwnedProjectArtifactIds("ab_tests", normalizedOwnerId, normalizedProjectId),
+        getOwnedProjectArtifactIds("pm_research_sessions", normalizedOwnerId, normalizedProjectId)
       ]);
 
     await Promise.all([
