@@ -1,137 +1,211 @@
 import Link from "next/link";
 
 import { MarketingLayout } from "@/components/marketing/marketing-layout";
+import { DOC_SECTION_GROUPS, DOC_SECTIONS } from "@/lib/docs/content";
 
-const DOC_NAV = [
-  { id: "overview", label: "Overview" },
-  { id: "pm-workflow", label: "PM Workflow" },
-  { id: "helper-workflow", label: "Helper Workflow" },
-  { id: "prd-prompt-guide", label: "PRD Prompts" },
-  { id: "research-prompt-guide", label: "Research Prompts" },
-  { id: "roadmap-prompt-guide", label: "Roadmap Prompts" }
-];
+function SectionBody({
+  callout,
+  detail,
+  points,
+  promptExamples,
+  status,
+  steps
+}: {
+  callout?: string;
+  detail: string;
+  points?: string[];
+  promptExamples?: string[];
+  status?: string;
+  steps?: string[];
+}) {
+  return (
+    <div className="space-y-5">
+      <p className="text-sm leading-7 text-muted-foreground">{detail}</p>
+
+      {status ? (
+        <div className="rounded-2xl border border-warning/25 bg-warning/10 px-4 py-3 text-sm text-warning">
+          {status}
+        </div>
+      ) : null}
+
+      {steps?.length ? (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Workflow
+          </p>
+          <ol className="space-y-3 pl-5 text-sm leading-7 text-muted-foreground">
+            {steps.map((step) => (
+              <li key={step} className="list-decimal">
+                {step}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+
+      {points?.length ? (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Key Details
+          </p>
+          <ul className="grid gap-3 md:grid-cols-2">
+            {points.map((point) => (
+              <li
+                key={point}
+                className="rounded-2xl border border-border/80 bg-background/70 px-4 py-3 text-sm leading-7 text-muted-foreground"
+              >
+                {point}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {promptExamples?.length ? (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Prompt Examples
+          </p>
+          <div className="grid gap-3">
+            {promptExamples.map((prompt) => (
+              <div
+                key={prompt}
+                className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3"
+              >
+                <code className="text-sm leading-7 text-foreground">{prompt}</code>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {callout ? (
+        <div className="rounded-2xl border border-accent/25 bg-accent/10 px-4 py-3 text-sm leading-7 text-accent">
+          {callout}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export default function DocsPage() {
   return (
     <MarketingLayout>
-      <main className="mx-auto w-full max-w-5xl space-y-6 p-6 pb-12">
-        <nav className="sticky top-[74px] z-20 rounded-xl border border-border bg-surface/95 p-3 backdrop-blur">
+      <main className="mx-auto w-full max-w-7xl space-y-6 px-4 pb-14 pt-6 md:px-6 lg:px-8">
+        <nav className="sticky top-[74px] z-20 rounded-2xl border border-border bg-surface/95 p-3 backdrop-blur lg:hidden">
           <div className="flex gap-2 overflow-x-auto">
-            {DOC_NAV.map((item) => (
+            {DOC_SECTIONS.map((section) => (
               <Link
-                key={item.id}
-                href={`/docs#${item.id}`}
-                className="whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-surface-2 hover:text-foreground"
+                key={section.id}
+                href={`/docs#${section.id}`}
+                className="whitespace-nowrap rounded-full border border-border/70 bg-background/75 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-accent/40 hover:text-foreground"
               >
-                {item.label}
+                {section.navLabel}
               </Link>
             ))}
           </div>
         </nav>
 
-        <section id="overview" className="docs-section rounded-xl border border-border bg-surface p-5">
-          <h1 className="text-2xl font-bold text-foreground">Product Documentation</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Learn how to run research, generate PRDs, and plan roadmap execution in OrbitPlus.
-          </p>
-        </section>
+        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="hidden lg:block">
+            <div className="sticky top-[92px] rounded-3xl border border-border bg-surface/95 p-4 shadow-sm">
+              <div className="space-y-1 border-b border-border/70 pb-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Product Docs
+                </p>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Jump directly to the workflow, canvas, or prompt guide you need.
+                </p>
+              </div>
 
-        <section id="pm-workflow" className="docs-section rounded-xl border border-border bg-surface p-5">
-          <h2 className="text-lg font-semibold text-foreground">PM Workflow</h2>
-          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-            <li>Create a study manually or use AI Kickstart from PM Dashboard.</li>
-            <li>Keep new AI-generated studies in draft, review questions, then publish.</li>
-            <li>Open Smart PRD Canvas and use Generate Full PRD for complete first draft.</li>
-            <li>Use append prompts to refine sections incrementally.</li>
-            <li>Move to Roadmap Canvas to place PRDs across quarters.</li>
-          </ol>
-        </section>
+              <div className="mt-4 space-y-5">
+                {DOC_SECTION_GROUPS.map((group) => {
+                  const groupSections = DOC_SECTIONS.filter((section) => section.groupId === group.id);
+                  if (!groupSections.length) return null;
 
-        <section
-          id="helper-workflow"
-          className="docs-section rounded-xl border border-border bg-surface p-5"
-        >
-          <h2 className="text-lg font-semibold text-foreground">Helper Workflow</h2>
-          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-            <li>Open Available Gigs and pick a published survey.</li>
-            <li>Answer every question (open text, single-select, and multi-select).</li>
-            <li>Add optional summary notes.</li>
-            <li>Submit responses for PM review.</li>
-          </ol>
-        </section>
+                  return (
+                    <div key={group.id} className="space-y-2">
+                      <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        {group.label}
+                      </p>
+                      <div className="space-y-1">
+                        {groupSections.map((section) => (
+                          <Link
+                            key={section.id}
+                            href={`/docs#${section.id}`}
+                            className="block rounded-xl px-3 py-2 text-sm text-muted-foreground transition hover:bg-surface-2 hover:text-foreground"
+                          >
+                            {section.navLabel}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-        <section
-          id="prd-prompt-guide"
-          className="docs-section rounded-xl border border-border bg-surface p-5"
-        >
-          <h2 className="text-lg font-semibold text-foreground">PRD Canvas Prompt Guide</h2>
-          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <li>
-              Full draft:{" "}
-              <code>Generate a full PRD for onboarding optimization using current research.</code>
-            </li>
-            <li>
-              Refine scope: <code>Tighten non-goals and remove low-impact requirements.</code>
-            </li>
-            <li>
-              Quality checks: <code>Add measurable acceptance criteria and success metrics.</code>
-            </li>
-            <li>
-              Delivery risk: <code>Expand the risks and mitigations section for rollout.</code>
-            </li>
-          </ul>
-        </section>
+              <div className="mt-5 rounded-2xl border border-border/80 bg-background/70 p-4 text-sm text-muted-foreground">
+                Go back to{" "}
+                <Link href="/dashboard/pm" className="font-semibold text-accent underline">
+                  PM Dashboard
+                </Link>
+                .
+              </div>
+            </div>
+          </aside>
 
-        <section
-          id="research-prompt-guide"
-          className="docs-section rounded-xl border border-border bg-surface p-5"
-        >
-          <h2 className="text-lg font-semibold text-foreground">Research Prompt Guide</h2>
-          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <li>
-              <code>
-                Create 8 questions for B2B onboarding friction with 2 single-select and 2
-                multi-select.
-              </code>
-            </li>
-            <li>
-              <code>Focus questions on activation drop-off between signup and first value moment.</code>
-            </li>
-            <li>
-              <code>Suggest options that are mutually exclusive and easy to compare.</code>
-            </li>
-          </ul>
-        </section>
+          <div className="space-y-6">
+            {DOC_SECTION_GROUPS.map((group) => {
+              const groupSections = DOC_SECTIONS.filter((section) => section.groupId === group.id);
+              if (!groupSections.length) return null;
 
-        <section
-          id="roadmap-prompt-guide"
-          className="docs-section rounded-xl border border-border bg-surface p-5"
-        >
-          <h2 className="text-lg font-semibold text-foreground">Roadmap Prompt Guide</h2>
-          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <li>
-              <code>Plan for Q2 retention growth while protecting onboarding conversion.</code>
-            </li>
-            <li>
-              <code>
-                Prioritize quick wins this quarter and push platform rebuilds to next quarter.
-              </code>
-            </li>
-            <li>
-              <code>Balance impact and delivery risk across all four quarters.</code>
-            </li>
-          </ul>
-        </section>
+              return (
+                <section key={group.id} className="space-y-4">
+                  <div className="px-1">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      {group.label}
+                    </p>
+                  </div>
 
-        <p className="text-sm text-muted-foreground">
-          Go back to{" "}
-          <Link href="/dashboard/pm" className="text-accent underline">
-            PM Dashboard
-          </Link>
-          .
-        </p>
+                  {groupSections.map((section) => (
+                    <article
+                      key={section.id}
+                      id={section.id}
+                      className="docs-section rounded-3xl border border-border bg-surface/95 p-6 shadow-sm"
+                    >
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          {group.label}
+                        </p>
+                        <h2 className="text-2xl font-semibold text-foreground">{section.title}</h2>
+                      </div>
+
+                      <div className="mt-5">
+                        <SectionBody
+                          callout={section.callout}
+                          detail={section.detail}
+                          points={section.points}
+                          promptExamples={section.promptExamples}
+                          status={section.status}
+                          steps={section.steps}
+                        />
+                      </div>
+                    </article>
+                  ))}
+                </section>
+              );
+            })}
+
+            <p className="px-1 text-sm text-muted-foreground lg:hidden">
+              Go back to{" "}
+              <Link href="/dashboard/pm" className="text-accent underline">
+                PM Dashboard
+              </Link>
+              .
+            </p>
+          </div>
+        </div>
       </main>
     </MarketingLayout>
   );
 }
-

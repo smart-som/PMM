@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, WandSparkles } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -14,23 +14,38 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSession } from "@/contexts/session-context";
 import {
+  buildRoadmapCanvasUrl,
+  clearStoredPrdRoadmapDraft,
+  readStoredPrdRoadmapDraft
+} from "@/lib/prd/roadmap-draft";
+import {
   createRoadmapItem,
   createRoadmapPlaceholderPrd,
   deleteRoadmapItem,
   getPrdsByOwner,
   getRoadmapItemsByOwner,
-  updatePrdLaunchQuarter
+  updatePrdLaunchQuarter,
+  updatePrdRoadmapPromptState
 } from "@/lib/queries/firestore";
 import { useRoleData } from "@/lib/queries/hooks";
-import { RoadmapCard, RoadmapItem, RoadmapPriority, RoadmapQuarter } from "@/types/app";
+import {
+  PrdRoadmapDraftPayload,
+  RoadmapCard,
+  RoadmapItem,
+  RoadmapPriority,
+  RoadmapQuarter
+} from "@/types/app";
 
 const QUARTERS: RoadmapQuarter[] = ["Q1", "Q2", "Q3", "Q4"];
 
 function RoadmapCanvasPageContent() {
   const { user } = useSession();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const selectedProjectId = searchParams.get("projectId");
+  const sourcePrdId = searchParams.get("sourcePrdId");
+  const isAiDraftRoute = searchParams.get("draft") === "ai";
   const isSoloMode = searchParams.get("mode") === "solo";
   const scopeProjectId = isSoloMode ? null : selectedProjectId;
   const { projectsQuery } = useRoleData(user?.uid ?? null, user?.role ?? null);
@@ -43,6 +58,7 @@ function RoadmapCanvasPageContent() {
   const [manualTitle, setManualTitle] = useState("");
   const [manualDescription, setManualDescription] = useState("");
   const [manualPriority, setManualPriority] = useState<RoadmapPriority>("medium");
+  const [aiDraftPayload, setAiDraftPayload] = useState<PrdRoadmapDraftPayload | null>(null);
 
   const prdsQuery = useQuery({
     queryKey: ["roadmap-prds", user?.uid],
@@ -99,6 +115,26 @@ function RoadmapCanvasPageContent() {
     );
   }, [scopedPrds]);
 
+  useEffect(() => {
+    if (!isAiDraftRoute || !sourcePrdId) {
+      setAiDraftPayload(null);
+      return;
+    }
+
+    const storedDraft = readStoredPrdRoadmapDraft(sourcePrdId);
+    if (!storedDraft) {
+      toast.error("The AI roadmap draft was unavailable.");
+      router.replace(
+        buildRoadmapCanvasUrl({
+          projectId: scopeProjectId
+        })
+      );
+      return;
+    }
+
+    setAiDraftPayload(storedDraft);
+  }, [isAiDraftRoute, router, scopeProjectId, sourcePrdId]);
+
   const updateQuarterMutation = useMutation({
     mutationFn: (payload: { prdId: string; quarter: RoadmapQuarter }) =>
       updatePrdLaunchQuarter(payload.prdId, user!.uid, payload.quarter)
@@ -140,6 +176,47 @@ function RoadmapCanvasPageContent() {
     mutationFn: (itemId: string) => deleteRoadmapItem(itemId, user!.uid),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["roadmap-items", user?.uid] });
+    }
+  });
+  const applyAiDraftMutation = useMutation({
+    mutationFn: async (payload: PrdRoadmapDraftPayload) => {
+      if (!user) {
+        throw new Error("You must be logged in as a PM.");
+      }
+
+      for (const deliverable of payload.deliverables) {
+        await createRoadmapItem(
+          {
+            ownerId: user.uid,
+            projectId: payload.projectId,
+            quarter: deliverable.quarter,
+            title: deliverable.title,
+            description: deliverable.description,
+            priority: deliverable.priority
+          },
+          { silent: true }
+        );
+      }
+
+      await updatePrdRoadmapPromptState(payload.prdId, user.uid, "roadmap_created");
+      await queryClient.invalidateQueries({ queryKey: ["roadmap-items", user?.uid] });
+    },
+    onSuccess: (_, payload) => {
+      clearStoredPrdRoadmapDraft(payload.prdId);
+      setAiDraftPayload(null);
+      router.replace(
+        buildRoadmapCanvasUrl({
+          projectId: payload.projectId
+        })
+      );
+      toast.success("AI roadmap draft applied.");
+    },
+    onError: (error) => {
+      if (error instanceof Error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.error("Could not apply the AI roadmap draft.");
     }
   });
 
@@ -212,6 +289,15 @@ function RoadmapCanvasPageContent() {
       { Q1: [], Q2: [], Q3: [], Q4: [] }
     );
   }, [scopedRoadmapItems]);
+  const aiDraftItemsByQuarter = useMemo(() => {
+    return QUARTERS.reduce<Record<RoadmapQuarter, PrdRoadmapDraftPayload["deliverables"]>>(
+      (acc, quarter) => {
+        acc[quarter] = aiDraftPayload?.deliverables.filter((item) => item.quarter === quarter) ?? [];
+        return acc;
+      },
+      { Q1: [], Q2: [], Q3: [], Q4: [] }
+    );
+  }, [aiDraftPayload]);
 
   function onDropOnQuarter(quarter: RoadmapQuarter) {
     if (!draggingCardId || !user) return;
@@ -265,6 +351,19 @@ function RoadmapCanvasPageContent() {
     });
   }
 
+  async function onDiscardAiDraft() {
+    if (!aiDraftPayload) return;
+
+    clearStoredPrdRoadmapDraft(aiDraftPayload.prdId);
+    setAiDraftPayload(null);
+    router.replace(
+      buildRoadmapCanvasUrl({
+        projectId: aiDraftPayload.projectId
+      })
+    );
+    toast.success("AI roadmap draft discarded.");
+  }
+
   return (
     <main className="p-6 pb-28">
       <Card>
@@ -283,6 +382,38 @@ function RoadmapCanvasPageContent() {
               Drag PRD cards across quarters. Add manual roadmap items with +.
             </p>
           </div>
+
+          {aiDraftPayload && (
+            <div className="mb-5 rounded-2xl border border-accent/30 bg-accent/10 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">AI Roadmap Draft Ready</p>
+                  <p className="text-xs text-muted-foreground">
+                    Source PRD: {aiDraftPayload.prdTitle}. Review these deliverables in the
+                    quarter columns, then apply or discard the draft.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void onDiscardAiDraft()}
+                    disabled={applyAiDraftMutation.isPending}
+                  >
+                    Discard Draft
+                  </Button>
+                  <Button
+                    type="button"
+                    className="bg-accent text-accent-foreground hover:bg-accent/90"
+                    onClick={() => applyAiDraftMutation.mutate(aiDraftPayload)}
+                    disabled={applyAiDraftMutation.isPending}
+                  >
+                    {applyAiDraftMutation.isPending ? "Applying..." : "Apply AI Draft"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-4 md:grid-cols-4">
             {QUARTERS.map((quarter) => (
@@ -354,11 +485,36 @@ function RoadmapCanvasPageContent() {
                     </article>
                   ))}
 
-                  {!cardsByQuarter[quarter].length && !manualItemsByQuarter[quarter]?.length && (
+                  {aiDraftItemsByQuarter[quarter]?.map((item, index) => (
+                    <article
+                      key={`${item.title}-${quarter}-${index}`}
+                      className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium text-foreground">{item.title}</p>
+                        <span className="rounded-full border border-warning/30 bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-warning">
+                          AI Draft
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                      <p className="mt-2 text-[11px] font-semibold uppercase text-muted-foreground">
+                        Priority: {item.priority}
+                      </p>
+                      {item.reason && (
+                        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+                          {item.reason}
+                        </p>
+                      )}
+                    </article>
+                  ))}
+
+                  {!cardsByQuarter[quarter].length &&
+                    !manualItemsByQuarter[quarter]?.length &&
+                    !aiDraftItemsByQuarter[quarter]?.length && (
                     <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
                       Drop roadmap items here or use + to add manually.
                     </div>
-                  )}
+                    )}
                 </div>
               </section>
             ))}

@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 
 import { requireFirebaseDb } from "@/lib/firebase/client";
+import { normalizeHelperStudyInterests } from "@/lib/helper/study-interests";
 import {
   ActiveSurvey,
   AnalyticsReport,
@@ -25,7 +26,11 @@ import {
   JourneyMap,
   PMResearchSummary,
   PmResearchSession,
+  PrdAssistantCompetitor,
+  PrdAssistantReadiness,
+  PrdAssistantWorkspace,
   PrdDocument,
+  PrdRoadmapPromptState,
   Project,
   RoadmapItem,
   RoadmapPriority,
@@ -157,6 +162,59 @@ function normalizeExpiresAt(value: unknown): number | undefined {
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((entry) => String(entry).trim()).filter(Boolean);
+}
+
+function normalizePrdAssistantReadiness(value: unknown): PrdAssistantReadiness {
+  if (value === "needs_more_info" || value === "ready_to_transfer") {
+    return value;
+  }
+  return "needs_idea";
+}
+
+function normalizePrdAssistantCompetitors(value: unknown): PrdAssistantCompetitor[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.reduce<PrdAssistantCompetitor[]>((competitors, rawCompetitor) => {
+    if (!rawCompetitor || typeof rawCompetitor !== "object") return competitors;
+    const record = rawCompetitor as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    const summary = typeof record.summary === "string" ? record.summary.trim() : "";
+    if (!name) return competitors;
+
+    competitors.push({ name, summary });
+    return competitors;
+  }, []);
+}
+
+function normalizePrdRoadmapPromptState(value: unknown): PrdRoadmapPromptState {
+  if (
+    value === "dismissed" ||
+    value === "accepted" ||
+    value === "roadmap_created"
+  ) {
+    return value;
+  }
+  return "pending";
+}
+
+function normalizePrdAssistantWorkspace(value: unknown): PrdAssistantWorkspace | undefined {
+  if (!value || typeof value !== "object") return undefined;
+
+  const record = value as Record<string, unknown>;
+  return {
+    idea: typeof record.idea === "string" ? record.idea.trim() : "",
+    clarificationNotes:
+      typeof record.clarificationNotes === "string" ? record.clarificationNotes.trim() : "",
+    assistantOpinion:
+      typeof record.assistantOpinion === "string" ? record.assistantOpinion.trim() : "",
+    ideaBreakdown: normalizeStringArray(record.ideaBreakdown),
+    marketSummary: typeof record.marketSummary === "string" ? record.marketSummary.trim() : "",
+    competitors: normalizePrdAssistantCompetitors(record.competitors),
+    clarifyingQuestions: normalizeStringArray(record.clarifyingQuestions),
+    readiness: normalizePrdAssistantReadiness(record.readiness),
+    draftMarkdown: typeof record.draftMarkdown === "string" ? record.draftMarkdown.trim() : "",
+    updatedAt: toMillis(record.updatedAt)
+  };
 }
 
 export function isExpiredSoloStudy(
@@ -393,7 +451,8 @@ export async function getAvailableActiveSurveysByHelper(
       "helper user id while loading available surveys"
     );
     const surveysRef = collection(db, "active_surveys");
-    const [publishedSnapshot, assignedSnapshot] = await Promise.all([
+    const submissionsRef = collection(db, "submissions");
+    const [publishedSnapshot, assignedSnapshot, submissionsSnapshot] = await Promise.all([
       getDocs(query(surveysRef, where("status", "==", "published"))),
       getDocs(
         query(
@@ -402,8 +461,17 @@ export async function getAvailableActiveSurveysByHelper(
           where("distributionMode", "==", "assigned"),
           where("helperIds", "array-contains", normalizedHelperId)
         )
-      )
+      ),
+      getDocs(query(submissionsRef, where("helperId", "==", normalizedHelperId)))
     ]);
+    const submittedStudyIds = new Set(
+      submissionsSnapshot.docs
+        .map((submissionDoc) => {
+          const studyId = submissionDoc.data().studyId;
+          return typeof studyId === "string" ? studyId : "";
+        })
+        .filter(Boolean)
+    );
 
     const surveys = new Map<string, ActiveSurvey>();
     publishedSnapshot.docs.forEach((surveyDoc) => {
@@ -411,11 +479,14 @@ export async function getAvailableActiveSurveysByHelper(
         id: surveyDoc.id,
         data: () => surveyDoc.data() as Record<string, unknown>
       });
-      if (survey.distributionMode === "open") {
+      if (survey.distributionMode === "open" && !submittedStudyIds.has(surveyDoc.id)) {
         surveys.set(surveyDoc.id, survey);
       }
     });
     assignedSnapshot.docs.forEach((surveyDoc) => {
+      if (submittedStudyIds.has(surveyDoc.id)) {
+        return;
+      }
       surveys.set(
         surveyDoc.id,
         toActiveSurvey({
@@ -913,7 +984,8 @@ export async function getHelperProfile(helperId: string): Promise<HelperProfile>
     return {
       displayName: typeof data?.displayName === "string" ? data.displayName : "",
       expertise: typeof data?.expertise === "string" ? data.expertise : "",
-      availability: typeof data?.availability === "string" ? data.availability : ""
+      availability: typeof data?.availability === "string" ? data.availability : "",
+      studyInterests: normalizeHelperStudyInterests(data?.studyInterests)
     };
   } catch (error) {
     handleFirestoreQueryError(error, "Could not load helper profile.");
@@ -934,6 +1006,7 @@ export async function updateHelperProfile(
         displayName: profile.displayName,
         expertise: profile.expertise,
         availability: profile.availability,
+        studyInterests: normalizeHelperStudyInterests(profile.studyInterests),
         updatedAt: serverTimestamp()
       },
       { merge: true }
@@ -961,9 +1034,11 @@ export async function getOrCreatePrdDocument(
       const newDocument: Omit<PrdDocument, "id"> = {
         projectId: inferredProjectId,
         ownerId: normalizedOwnerId,
-        title: "Product Requirements Document",
-        content: ""
-      };
+      title: "Product Requirements Document",
+      content: "",
+      isReady: false,
+      roadmapPromptState: "pending"
+    };
       await setDoc(prdRef, { ...newDocument, updatedAt: serverTimestamp() });
       return { id: normalizedPrdId, ...newDocument };
     }
@@ -975,6 +1050,11 @@ export async function getOrCreatePrdDocument(
       projectId: normalizeNullableProjectId(data.projectId) ?? inferredProjectId,
       title: String(data.title ?? "Product Requirements Document"),
       content: String(data.content ?? ""),
+      assistantWorkspace: normalizePrdAssistantWorkspace(data.assistantWorkspace),
+      isReady: Boolean(data.isReady),
+      readyAt: toMillis(data.readyAt),
+      roadmapPromptState: normalizePrdRoadmapPromptState(data.roadmapPromptState),
+      roadmapPromptUpdatedAt: toMillis(data.roadmapPromptUpdatedAt),
       impactScore: typeof data.impactScore === "number" ? data.impactScore : undefined,
       targetLaunchQuarter:
         typeof data.targetLaunchQuarter === "string"
@@ -1003,6 +1083,8 @@ export async function createPrdDocument(
       projectId: resolvedProjectId,
       title,
       content: "",
+      isReady: false,
+      roadmapPromptState: "pending",
       updatedAt: serverTimestamp()
     });
     toast.success("PRD draft created.");
@@ -1053,6 +1135,63 @@ export async function savePrdContent(
   }
 }
 
+export async function savePrdAssistantWorkspace(
+  prdId: string,
+  ownerId: string,
+  workspace: PrdAssistantWorkspace,
+  projectId?: string | null
+): Promise<void> {
+  try {
+    const db = requireDbClient();
+    const normalizedPrdId = assertRequiredId(prdId, "PRD id while saving assistant workspace");
+    const normalizedOwnerId = assertRequiredId(
+      ownerId,
+      "PM user id while saving assistant workspace"
+    );
+    const prdRef = doc(db, "prds", normalizedPrdId);
+    const prdSnap = await getDoc(prdRef);
+    if (prdSnap.exists() && String(prdSnap.data().ownerId ?? normalizedOwnerId) !== normalizedOwnerId) {
+      throw new Error("You cannot edit this PRD.");
+    }
+
+    const assistantWorkspace: PrdAssistantWorkspace = {
+      idea: workspace.idea.trim(),
+      clarificationNotes: workspace.clarificationNotes.trim(),
+      assistantOpinion: workspace.assistantOpinion.trim(),
+      ideaBreakdown: workspace.ideaBreakdown.map((item) => item.trim()).filter(Boolean),
+      marketSummary: workspace.marketSummary.trim(),
+      competitors: workspace.competitors
+        .map((competitor) => ({
+          name: competitor.name.trim(),
+          summary: competitor.summary.trim()
+        }))
+        .filter((competitor) => competitor.name),
+      clarifyingQuestions: workspace.clarifyingQuestions.map((item) => item.trim()).filter(Boolean),
+      readiness: normalizePrdAssistantReadiness(workspace.readiness),
+      draftMarkdown: workspace.draftMarkdown.trim(),
+      updatedAt: Date.now()
+    };
+
+    const payload: Record<string, unknown> = {
+      ownerId: normalizedOwnerId,
+      title: prdSnap.exists()
+        ? String(prdSnap.data().title ?? "Product Requirements Document")
+        : "Product Requirements Document",
+      assistantWorkspace,
+      updatedAt: serverTimestamp()
+    };
+
+    if (projectId !== undefined) {
+      payload.projectId = await assertOwnedProjectId(projectId, normalizedOwnerId);
+    }
+
+    await setDoc(prdRef, payload, { merge: true });
+  } catch (error) {
+    handleFirestoreQueryError(error, "Could not save PRD assistant.");
+    throw error;
+  }
+}
+
 export async function getPrdsByOwner(ownerId: string): Promise<PrdDocument[]> {
   try {
     const db = requireDbClient();
@@ -1069,6 +1208,11 @@ export async function getPrdsByOwner(ownerId: string): Promise<PrdDocument[]> {
         projectId: normalizeNullableProjectId(data.projectId),
         title: String(data.title ?? "Product Requirements Document"),
         content: String(data.content ?? ""),
+        assistantWorkspace: normalizePrdAssistantWorkspace(data.assistantWorkspace),
+        isReady: Boolean(data.isReady),
+        readyAt: toMillis(data.readyAt),
+        roadmapPromptState: normalizePrdRoadmapPromptState(data.roadmapPromptState),
+        roadmapPromptUpdatedAt: toMillis(data.roadmapPromptUpdatedAt),
         impactScore: typeof data.impactScore === "number" ? data.impactScore : undefined,
         targetLaunchQuarter:
           typeof data.targetLaunchQuarter === "string"
@@ -1137,6 +1281,84 @@ export async function updatePrdLaunchQuarter(
   }
 }
 
+export async function updatePrdReadiness(
+  prdId: string,
+  ownerId: string,
+  isReady: boolean
+): Promise<void> {
+  try {
+    const db = requireDbClient();
+    const normalizedPrdId = assertRequiredId(prdId, "PRD id while updating PRD readiness");
+    const normalizedOwnerId = assertRequiredId(ownerId, "PM user id while updating PRD readiness");
+    const prdRef = doc(db, "prds", normalizedPrdId);
+    const prdSnap = await getDoc(prdRef);
+
+    if (!prdSnap.exists()) {
+      throw new Error("This PRD no longer exists.");
+    }
+    if (String(prdSnap.data().ownerId ?? "") !== normalizedOwnerId) {
+      throw new Error("You cannot edit this PRD.");
+    }
+
+    await setDoc(
+      prdRef,
+      {
+        ownerId: normalizedOwnerId,
+        isReady,
+        readyAt: isReady ? serverTimestamp() : deleteField(),
+        roadmapPromptState:
+          prdSnap.data().roadmapPromptState ?? normalizePrdRoadmapPromptState(undefined),
+        roadmapPromptUpdatedAt:
+          prdSnap.data().roadmapPromptUpdatedAt ?? serverTimestamp(),
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+    toast.success(isReady ? "PRD marked ready." : "PRD marked not ready.");
+  } catch (error) {
+    handleFirestoreQueryError(error, "Could not update PRD readiness.");
+    throw error;
+  }
+}
+
+export async function updatePrdRoadmapPromptState(
+  prdId: string,
+  ownerId: string,
+  state: PrdRoadmapPromptState
+): Promise<void> {
+  try {
+    const db = requireDbClient();
+    const normalizedPrdId = assertRequiredId(prdId, "PRD id while updating roadmap prompt state");
+    const normalizedOwnerId = assertRequiredId(
+      ownerId,
+      "PM user id while updating roadmap prompt state"
+    );
+    const prdRef = doc(db, "prds", normalizedPrdId);
+    const prdSnap = await getDoc(prdRef);
+
+    if (!prdSnap.exists()) {
+      throw new Error("This PRD no longer exists.");
+    }
+    if (String(prdSnap.data().ownerId ?? "") !== normalizedOwnerId) {
+      throw new Error("You cannot edit this PRD.");
+    }
+
+    await setDoc(
+      prdRef,
+      {
+        ownerId: normalizedOwnerId,
+        roadmapPromptState: normalizePrdRoadmapPromptState(state),
+        roadmapPromptUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    handleFirestoreQueryError(error, "Could not update roadmap prompt state.");
+    throw error;
+  }
+}
+
 export async function createRoadmapPlaceholderPrd(
   ownerId: string,
   title: string,
@@ -1175,7 +1397,8 @@ type CreateRoadmapItemInput = {
 };
 
 export async function createRoadmapItem(
-  input: CreateRoadmapItemInput
+  input: CreateRoadmapItemInput,
+  options?: { silent?: boolean }
 ): Promise<void> {
   try {
     const db = requireDbClient();
@@ -1191,7 +1414,9 @@ export async function createRoadmapItem(
       priority: input.priority,
       createdAt: serverTimestamp()
     });
-    toast.success("Roadmap item added.");
+    if (!options?.silent) {
+      toast.success("Roadmap item added.");
+    }
   } catch (error) {
     handleFirestoreQueryError(error, "Could not create roadmap item.");
     throw error;

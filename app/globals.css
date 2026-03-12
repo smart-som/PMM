@@ -55,6 +55,10 @@
     color-scheme: light;
   }
 
+  html.orbitplus-marketing-scroll {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-geist-sans), "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial,
@@ -76,6 +80,12 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  html.orbitplus-marketing-scroll {
+    scroll-behavior: auto;
+  }
+}
+
 @layer utilities {
   .interactive-lift {
     transition-property: transform, box-shadow, border-color, background-color, color;
@@ -86,6 +96,11 @@
   .interactive-lift:hover {
     transform: translateY(-2px);
     box-shadow: 0 16px 36px hsl(var(--foreground) / 0.12);
+  }
+
+  .marketing-shell .interactive-lift:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px hsl(var(--foreground) / 0.08);
   }
 
   .reveal {
@@ -111,6 +126,166 @@
     animation: orbitplus-float 4.8s ease-in-out infinite;
   }
 
+  .marketing-shell {
+    position: relative;
+    overflow-x: clip;
+  }
+
+  .marketing-backdrop-grid {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(hsl(var(--border) / 0.12) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.12) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(180deg, transparent, black 12%, black 88%, transparent);
+    opacity: 0.48;
+  }
+
+  .marketing-backdrop-glow {
+    position: fixed;
+    z-index: 0;
+    width: 34rem;
+    height: 34rem;
+    border-radius: 999px;
+    filter: blur(90px);
+    pointer-events: none;
+    opacity: 0.22;
+  }
+
+  .marketing-backdrop-glow-a {
+    left: -8rem;
+    top: 6rem;
+    background: hsl(var(--accent) / 0.24);
+  }
+
+  .marketing-backdrop-glow-b {
+    right: -10rem;
+    top: 20rem;
+    background: hsl(var(--success) / 0.16);
+  }
+
+  .marketing-showcase {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    min-height: 100%;
+    border-radius: 2rem;
+    border: 1px solid hsl(var(--border));
+    background:
+      radial-gradient(circle at top left, hsl(var(--accent) / 0.12), transparent 34%),
+      linear-gradient(180deg, hsl(var(--surface) / 0.92), hsl(var(--surface-2) / 0.96));
+    box-shadow: 0 14px 36px hsl(var(--foreground) / 0.08);
+  }
+
+  .marketing-showcase-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(hsl(var(--border) / 0.18) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.18) 1px, transparent 1px);
+    background-size: 26px 26px;
+    mask-image: linear-gradient(180deg, transparent, black 8%, black 92%, transparent);
+    opacity: 0.55;
+  }
+
+  .marketing-showcase-orbit {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--accent) / 0.16);
+    transform: translate(-50%, -50%);
+  }
+
+  .marketing-showcase-orbit-a {
+    width: 78%;
+    height: 78%;
+    opacity: 0.48;
+  }
+
+  .marketing-showcase-orbit-b {
+    width: 94%;
+    height: 94%;
+    border-color: hsl(var(--foreground) / 0.08);
+    opacity: 0.32;
+  }
+
+  .marketing-showcase-glow {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(20px);
+    opacity: 0.24;
+  }
+
+  .marketing-showcase-glow-a {
+    left: 10%;
+    top: 10%;
+    width: 140px;
+    height: 140px;
+    background: hsl(var(--accent) / 0.16);
+  }
+
+  .marketing-showcase-glow-b {
+    right: 8%;
+    bottom: 12%;
+    width: 180px;
+    height: 180px;
+    background: hsl(var(--success) / 0.12);
+    animation-delay: 1s;
+  }
+
+  .marketing-glass-panel {
+    position: relative;
+    border-radius: 1.75rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.82);
+    padding: 1.25rem;
+    box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.03), 0 10px 24px hsl(var(--foreground) / 0.08);
+    backdrop-filter: blur(16px);
+  }
+
+  .marketing-floating-card {
+    position: absolute;
+    z-index: 20;
+    width: min(220px, calc(100% - 1.5rem));
+    border-radius: 1.25rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.9);
+    padding: 0.95rem;
+    box-shadow: 0 8px 20px hsl(var(--foreground) / 0.1);
+    backdrop-filter: blur(14px);
+  }
+
+  .marketing-floating-card-a {
+    left: 1rem;
+    top: 1rem;
+  }
+
+  .marketing-floating-card-b {
+    right: 1rem;
+    bottom: 1rem;
+    animation-delay: 900ms;
+  }
+
+  .marketing-metric-panel {
+    border-radius: 1.5rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.78);
+    padding: 1rem;
+    box-shadow: 0 8px 20px hsl(var(--foreground) / 0.06);
+    backdrop-filter: blur(14px);
+  }
+
+  .marketing-tilt-panel {
+    transform: none;
+  }
+
+  .marketing-tilt-panel-delayed {
+    animation-delay: 850ms;
+  }
+
   .docs-section {
     scroll-margin-top: 110px;
     transition: border-color 220ms ease, box-shadow 220ms ease, transform 220ms ease;
@@ -128,9 +303,15 @@
     overflow: hidden;
     border-radius: 1.5rem;
     border: 1px solid hsl(var(--border));
-    background: hsl(var(--surface));
+    background:
+      radial-gradient(circle at var(--hero-glow-x, 50%) var(--hero-glow-y, 50%), hsl(var(--accent) / 0.14), transparent 24%),
+      linear-gradient(180deg, hsl(var(--surface)), hsl(var(--surface-2)));
     min-height: 360px;
-    box-shadow: 0 28px 70px hsl(var(--foreground) / 0.2);
+    box-shadow: 0 10px 24px hsl(var(--foreground) / 0.08);
+    transform: perspective(1400px) rotateX(0deg) rotateY(0deg);
+    transform-style: preserve-3d;
+    transition: transform 180ms ease, box-shadow 220ms ease, border-color 220ms ease, background-position 180ms ease;
+    will-change: transform;
   }
 
   .hero-planet-stars {
@@ -143,8 +324,9 @@
     position: absolute;
     border-radius: 999px;
     background: hsl(var(--foreground) / 0.75);
-    animation: orbitplus-star-pulse var(--star-duration, 2.6s) ease-in-out infinite;
+    animation: orbitplus-star-pulse var(--star-duration, 5.8s) ease-in-out infinite;
     animation-delay: var(--star-delay, 0ms);
+    opacity: 0.42;
   }
 
   .hero-planet-ring {
@@ -161,15 +343,15 @@
   .hero-planet-ring-outer {
     width: 88%;
     height: 88%;
-    opacity: 0.65;
-    animation: orbitplus-ring-spin 18s linear infinite;
+    opacity: 0.46;
+    animation: orbitplus-ring-spin 42s linear infinite;
   }
 
   .hero-planet-ring-inner {
     width: 62%;
     height: 62%;
-    opacity: 0.45;
-    animation: orbitplus-ring-spin-reverse 12s linear infinite;
+    opacity: 0.3;
+    animation: orbitplus-ring-spin-reverse 54s linear infinite;
   }
 
   .hero-planet-core {
@@ -181,10 +363,10 @@
     margin-left: -85px;
     margin-top: -85px;
     border-radius: 999px;
-    border: 1px solid hsl(var(--accent) / 0.55);
-    background: hsl(var(--accent) / 0.24);
-    box-shadow: inset 0 -18px 28px hsl(var(--foreground) / 0.26), 0 0 90px hsl(var(--accent) / 0.2);
-    animation: orbitplus-core-drift 9s ease-in-out infinite;
+    border: 1px solid hsl(var(--accent) / 0.4);
+    background: hsl(var(--accent) / 0.18);
+    box-shadow: inset 0 -12px 18px hsl(var(--foreground) / 0.18), 0 0 36px hsl(var(--accent) / 0.12);
+    animation: orbitplus-core-drift 16s ease-in-out infinite;
   }
 
   .hero-planet-band {
@@ -223,7 +405,7 @@
   }
 
   .hero-planet-satellite-a {
-    animation: orbitplus-satellite-a 7.5s linear infinite;
+    animation: orbitplus-satellite-a 18s linear infinite;
   }
 
   .hero-planet-satellite-b {
@@ -232,7 +414,148 @@
     margin-left: -3px;
     margin-top: -3px;
     background: hsl(var(--foreground) / 0.9);
-    animation: orbitplus-satellite-b 11.2s linear infinite;
+    animation: orbitplus-satellite-b 26s linear infinite;
+  }
+
+  .pm-tool-wip-scene {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    min-height: 360px;
+    border-radius: 1.75rem;
+    border: 1px solid hsl(var(--border));
+    background:
+      radial-gradient(circle at top, hsl(var(--accent) / 0.16), transparent 38%),
+      linear-gradient(180deg, hsl(var(--surface)), hsl(var(--surface-2)));
+    box-shadow: 0 26px 70px hsl(var(--foreground) / 0.16);
+  }
+
+  .pm-tool-wip-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(hsl(var(--border) / 0.28) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.28) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: linear-gradient(180deg, transparent, black 14%, black 86%, transparent);
+    animation: orbitplus-wip-grid 16s linear infinite;
+  }
+
+  .pm-tool-wip-orbit {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--accent) / 0.22);
+    transform: translate(-50%, -50%);
+  }
+
+  .pm-tool-wip-orbit-a {
+    width: 66%;
+    height: 66%;
+    animation: orbitplus-ring-spin 22s linear infinite;
+  }
+
+  .pm-tool-wip-orbit-b {
+    width: 82%;
+    height: 82%;
+    border-color: hsl(var(--foreground) / 0.12);
+    animation: orbitplus-ring-spin-reverse 18s linear infinite;
+  }
+
+  .pm-tool-wip-pulse {
+    position: absolute;
+    border-radius: 999px;
+    background: hsl(var(--accent) / 0.16);
+    filter: blur(18px);
+    animation: orbitplus-wip-pulse 6s ease-in-out infinite;
+  }
+
+  .pm-tool-wip-pulse-a {
+    left: 10%;
+    top: 12%;
+    width: 120px;
+    height: 120px;
+  }
+
+  .pm-tool-wip-pulse-b {
+    right: 12%;
+    bottom: 16%;
+    width: 140px;
+    height: 140px;
+    animation-delay: 900ms;
+  }
+
+  .pm-tool-wip-core {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 168px;
+    height: 168px;
+    margin-left: -84px;
+    margin-top: -84px;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--accent) / 0.45);
+    background:
+      radial-gradient(circle at 30% 30%, hsl(var(--background) / 0.95), hsl(var(--accent) / 0.22));
+    box-shadow: inset 0 -22px 32px hsl(var(--foreground) / 0.16), 0 0 90px hsl(var(--accent) / 0.16);
+    animation: orbitplus-core-drift 9s ease-in-out infinite;
+  }
+
+  .pm-tool-wip-card {
+    position: absolute;
+    width: min(240px, calc(100% - 3rem));
+    border-radius: 1.25rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.86);
+    padding: 1rem;
+    box-shadow: 0 16px 40px hsl(var(--foreground) / 0.12);
+    backdrop-filter: blur(14px);
+  }
+
+  .pm-tool-wip-card-a {
+    left: 7%;
+    top: 14%;
+    animation: orbitplus-wip-card-float 7s ease-in-out infinite;
+  }
+
+  .pm-tool-wip-card-b {
+    right: 7%;
+    bottom: 12%;
+    animation: orbitplus-wip-card-float 7s ease-in-out infinite reverse;
+    animation-delay: 600ms;
+  }
+
+  .pm-tool-wip-chip {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.8);
+    padding: 0.5rem 0.8rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+    backdrop-filter: blur(12px);
+    animation: orbitplus-wip-chip-float 6.5s ease-in-out infinite;
+  }
+
+  .pm-tool-wip-chip-a {
+    right: 10%;
+    top: 12%;
+  }
+
+  .pm-tool-wip-chip-b {
+    left: 12%;
+    bottom: 12%;
+    animation-delay: 1200ms;
   }
 }
 
@@ -272,6 +595,36 @@
   }
 }
 
+@keyframes orbitplus-marketing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes orbitplus-marketing-tilt {
+  0%,
+  100% {
+    transform: perspective(1200px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(1200px) rotateX(1deg) rotateY(-1.2deg) translateY(-6px);
+  }
+}
+
+@keyframes orbitplus-marketing-glow {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(24px, -18px, 0) scale(1.08);
+  }
+}
+
 @keyframes orbitplus-ring-spin {
   from {
     transform: translate(-50%, -50%) rotate(0deg);
@@ -296,7 +649,7 @@
     transform: translateY(0) scale(1);
   }
   50% {
-    transform: translateY(-6px) scale(1.02);
+    transform: translateY(-3px) scale(1.01);
   }
 }
 
@@ -321,12 +674,53 @@
 @keyframes orbitplus-star-pulse {
   0%,
   100% {
-    opacity: 0.22;
+    opacity: 0.18;
     transform: scale(1);
   }
   50% {
-    opacity: 0.9;
-    transform: scale(1.12);
+    opacity: 0.52;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes orbitplus-wip-grid {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(28px, 28px, 0);
+  }
+}
+
+@keyframes orbitplus-wip-pulse {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.64;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes orbitplus-wip-card-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes orbitplus-wip-chip-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(6px);
   }
 }
 
@@ -354,12 +748,27 @@
   .orbitplus-enter,
   .orbitplus-enter-delay,
   .orbitplus-float,
+  .marketing-backdrop-glow,
+  .marketing-showcase-grid,
+  .marketing-showcase-orbit-a,
+  .marketing-showcase-orbit-b,
+  .marketing-showcase-glow,
+  .marketing-floating-card,
+  .marketing-tilt-panel,
   .hero-planet-star,
   .hero-planet-ring-outer,
   .hero-planet-ring-inner,
   .hero-planet-core,
   .hero-planet-satellite-a,
-  .hero-planet-satellite-b {
+  .hero-planet-satellite-b,
+  .pm-tool-wip-grid,
+  .pm-tool-wip-orbit-a,
+  .pm-tool-wip-orbit-b,
+  .pm-tool-wip-pulse,
+  .pm-tool-wip-core,
+  .pm-tool-wip-card-a,
+  .pm-tool-wip-card-b,
+  .pm-tool-wip-chip {
     animation: none !important;
   }
 }

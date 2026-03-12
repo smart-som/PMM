@@ -28,7 +28,7 @@ const PM_NAV: NavItem[] = [
 
 const HELPER_NAV: NavItem[] = [
   { label: "Available Gigs", href: "/portal/helper" },
-  { label: "Earnings", href: "/portal/helper/earnings" },
+  { label: "Earnings Soon", href: "/portal/helper/earnings" },
   { label: "Profile", href: "/portal/helper/profile" },
   { label: "Docs", href: "/docs" }
 ];

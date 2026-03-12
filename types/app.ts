@@ -1,4 +1,20 @@
 export type UserRole = "pm" | "helper";
+export type HelperStudyInterest =
+  | "all"
+  | "usability-testing"
+  | "concept-validation"
+  | "feature-feedback"
+  | "onboarding"
+  | "pricing-research"
+  | "messaging-copy"
+  | "customer-satisfaction"
+  | "market-discovery"
+  | "competitive-research"
+  | "retention-loyalty"
+  | "beta-feedback"
+  | "checkout-conversion"
+  | "mobile-experience"
+  | "b2b-workflows";
 
 export type AppUser = {
   uid: string;
@@ -11,6 +27,12 @@ export type RoadmapQuarter = "Q1" | "Q2" | "Q3" | "Q4";
 export type SurveyQuestionType = "open_text" | "single_select" | "multi_select";
 export type StudyStatus = "draft" | "published";
 export type StudyDistributionMode = "open" | "assigned";
+export type PrdAssistantReadiness = "needs_idea" | "needs_more_info" | "ready_to_transfer";
+export type PrdRoadmapPromptState =
+  | "pending"
+  | "dismissed"
+  | "accepted"
+  | "roadmap_created";
 
 export type SurveyQuestion = {
   id: string;
@@ -58,12 +80,35 @@ export type Submission = {
   createdAt?: number;
 };
 
+export type PrdAssistantCompetitor = {
+  name: string;
+  summary: string;
+};
+
+export type PrdAssistantWorkspace = {
+  idea: string;
+  clarificationNotes: string;
+  assistantOpinion: string;
+  ideaBreakdown: string[];
+  marketSummary: string;
+  competitors: PrdAssistantCompetitor[];
+  clarifyingQuestions: string[];
+  readiness: PrdAssistantReadiness;
+  draftMarkdown: string;
+  updatedAt?: number;
+};
+
 export type PrdDocument = {
   id: string;
   projectId: string | null;
   ownerId: string;
   title: string;
   content: string;
+  assistantWorkspace?: PrdAssistantWorkspace;
+  isReady?: boolean;
+  readyAt?: number;
+  roadmapPromptState?: PrdRoadmapPromptState;
+  roadmapPromptUpdatedAt?: number;
   impactScore?: number;
   targetLaunchQuarter?: RoadmapQuarter;
   updatedAt?: number;
@@ -116,6 +161,22 @@ export type RoadmapItem = {
   description: string;
   priority: RoadmapPriority;
   createdAt?: number;
+};
+
+export type GeneratedRoadmapDeliverable = {
+  title: string;
+  description: string;
+  quarter: RoadmapQuarter;
+  priority: RoadmapPriority;
+  reason: string;
+};
+
+export type PrdRoadmapDraftPayload = {
+  prdId: string;
+  projectId: string | null;
+  prdTitle: string;
+  generatedAt: number;
+  deliverables: GeneratedRoadmapDeliverable[];
 };
 
 export type AnalyticsReport = {
@@ -188,6 +249,7 @@ export type HelperProfile = {
   displayName: string;
   expertise: string;
   availability: string;
+  studyInterests: HelperStudyInterest[];
 };
 
 export type HelperEarningsEntry = {
