@@ -1,5 +1,20 @@
 "use client";
 
+import {
+  BarChart3,
+  BookOpenText,
+  Briefcase,
+  FileText,
+  FlaskConical,
+  LayoutDashboard,
+  Radar,
+  Route,
+  Settings,
+  User,
+  Wallet,
+  Waypoints,
+  type LucideIcon
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
@@ -12,25 +27,26 @@ import { UserRole } from "@/types/app";
 type NavItem = {
   label: string;
   href: string;
+  icon: LucideIcon;
 };
 
 const PM_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard/pm" },
-  { label: "Research", href: "/dashboard/pm/research" },
-  { label: "PRD Canvas", href: "/dashboard/pm/prd" },
-  { label: "Roadmap", href: "/dashboard/pm/roadmap" },
-  { label: "Analytics", href: "/dashboard/pm/analytics" },
-  { label: "Journey Map", href: "/dashboard/pm/journey-map" },
-  { label: "A/B Testing", href: "/dashboard/pm/ab-testing" },
-  { label: "Docs", href: "/docs" },
-  { label: "Settings", href: "/dashboard/pm/settings" }
+  { label: "Dashboard", href: "/dashboard/pm", icon: LayoutDashboard },
+  { label: "Research", href: "/dashboard/pm/research", icon: Radar },
+  { label: "PRD Canvas", href: "/dashboard/pm/prd", icon: FileText },
+  { label: "Roadmap", href: "/dashboard/pm/roadmap", icon: Waypoints },
+  { label: "Analytics", href: "/dashboard/pm/analytics", icon: BarChart3 },
+  { label: "Journey Map", href: "/dashboard/pm/journey-map", icon: Route },
+  { label: "A/B Testing", href: "/dashboard/pm/ab-testing", icon: FlaskConical },
+  { label: "Docs", href: "/docs", icon: BookOpenText },
+  { label: "Settings", href: "/dashboard/pm/settings", icon: Settings }
 ];
 
 const HELPER_NAV: NavItem[] = [
-  { label: "Available Gigs", href: "/portal/helper" },
-  { label: "Earnings Soon", href: "/portal/helper/earnings" },
-  { label: "Profile", href: "/portal/helper/profile" },
-  { label: "Docs", href: "/docs" }
+  { label: "Available Gigs", href: "/portal/helper", icon: Briefcase },
+  { label: "Earnings Soon", href: "/portal/helper/earnings", icon: Wallet },
+  { label: "Profile", href: "/portal/helper/profile", icon: User },
+  { label: "Docs", href: "/docs", icon: BookOpenText }
 ];
 
 function isActive(pathname: string, href: string) {
@@ -74,17 +90,19 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <nav className="space-y-1">
             {navItems.map((item) => {
               const active = isActive(pathname, item.href);
+              const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={
                     active
-                      ? "block rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm font-semibold text-accent"
-                      : "block rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                      ? "flex items-center gap-3 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2.5 text-sm font-semibold text-accent"
+                      : "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
                   }
                 >
-                  {item.label}
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>{item.label}</span>
                 </Link>
               );
             })}

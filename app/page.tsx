@@ -13,6 +13,7 @@ import {
 import { HeroPlanet } from "@/components/marketing/hero-planet";
 import { MarketingLayout } from "@/components/marketing/marketing-layout";
 import { Reveal } from "@/components/marketing/reveal";
+import { SectionLabel } from "@/components/marketing/section-label";
 
 const PLATFORM_LAYERS = [
   {
@@ -113,12 +114,9 @@ export default function HomePage() {
     <MarketingLayout getStartedHref="/login?mode=signup&role=pm" showSectionNav>
       <main>
         <section className="relative overflow-hidden border-b border-border/70">
-          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-10 px-6 pb-20 pt-16 md:px-10 md:pb-24 md:pt-20 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-14 px-6 pb-24 pt-20 md:px-10 md:pb-32 md:pt-28 lg:grid-cols-[1.05fr_0.95fr] xl:gap-20">
             <Reveal className="orbitplus-enter flex flex-col justify-center">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>PM Operating System</span>
-              </div>
+              <SectionLabel icon={Sparkles}>PM Operating System</SectionLabel>
 
               <h1 className="mt-6 max-w-4xl text-5xl font-black leading-[0.92] tracking-tight text-foreground md:text-7xl xl:text-[5.5rem]">
                 Build product decisions with actual evidence, not scattered guesses.
@@ -180,14 +178,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="command-deck" className="scroll-mt-28 border-b border-border/70 py-16 md:py-24">
+        <section id="command-deck" className="scroll-mt-28 border-b border-border/70 py-20 md:py-32">
           <div className="mx-auto w-full max-w-7xl px-6 md:px-10">
-            <Reveal className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr]">
-              <div className="space-y-4">
-                <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-                  <BrainCircuit className="h-3.5 w-3.5" />
-                  <span>Command Deck</span>
-                </div>
+            <Reveal className="grid gap-12 lg:grid-cols-[0.92fr_1.08fr] xl:gap-16">
+              <div className="space-y-5 md:space-y-6">
+                <SectionLabel icon={BrainCircuit}>Command Deck</SectionLabel>
                 <h2 className="max-w-3xl text-4xl font-black tracking-tight text-foreground md:text-5xl">
                   A premium product workspace that keeps the core surfaces in one view.
                 </h2>
@@ -198,8 +193,8 @@ export default function HomePage() {
                 </p>
               </div>
 
-              <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-5 md:space-y-6">
+                <div className="grid gap-4 sm:grid-cols-2">
                   {PRODUCT_SURFACES.map((surface) => (
                     <div
                       key={surface}
@@ -210,7 +205,7 @@ export default function HomePage() {
                   ))}
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-3">
                   {COMMAND_DECK_METRICS.map((item) => (
                     <div key={item.label} className="marketing-metric-panel">
                       <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
@@ -225,13 +220,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="platform" className="scroll-mt-28 border-b border-border/70 py-16 md:py-24">
+        <section id="platform" className="scroll-mt-28 border-b border-border/70 py-20 md:py-32">
           <div className="mx-auto w-full max-w-7xl px-6 md:px-10">
-            <Reveal className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-              <div className="space-y-4">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-                  Platform
-                </p>
+            <Reveal className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] xl:gap-16">
+              <div className="space-y-5 md:space-y-6">
+                <SectionLabel>Platform</SectionLabel>
                 <h2 className="max-w-3xl text-4xl font-black tracking-tight text-foreground md:text-5xl">
                   One premium PM system instead of five disconnected tools.
                 </h2>
@@ -241,7 +234,7 @@ export default function HomePage() {
                 </p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-5 md:grid-cols-2">
                 {PLATFORM_LAYERS.map((item) => (
                   <article
                     key={item.title}
@@ -259,22 +252,20 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="workflow" className="scroll-mt-28 py-16 md:py-24">
+        <section id="workflow" className="scroll-mt-28 py-20 md:py-32">
           <div className="mx-auto w-full max-w-7xl px-6 md:px-10">
-            <Reveal className="max-w-3xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-                Workflow
-              </p>
-              <h2 className="mt-3 text-4xl font-black tracking-tight text-foreground md:text-5xl">
+            <Reveal className="max-w-3xl space-y-5 md:space-y-6">
+              <SectionLabel>Workflow</SectionLabel>
+              <h2 className="text-4xl font-black tracking-tight text-foreground md:text-5xl">
                 Built around the PM loop that actually matters.
               </h2>
-              <p className="mt-4 text-base leading-8 text-muted-foreground">
+              <p className="text-base leading-8 text-muted-foreground">
                 The best part of OrbitPlus is not one AI button. It is the way each layer hands
                 forward useful structure so the next decision starts with better context.
               </p>
             </Reveal>
 
-            <div className="mt-10 grid gap-4 lg:grid-cols-4">
+            <div className="mt-12 grid gap-5 lg:grid-cols-4">
               {WORKFLOW_STEPS.map((item, index) => (
                 <Reveal
                   key={item.step}
@@ -296,12 +287,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="proof" className="scroll-mt-28 border-y border-border/70 py-16 md:py-24">
-          <div className="mx-auto grid w-full max-w-7xl gap-6 px-6 md:px-10 lg:grid-cols-[1.05fr_0.95fr]">
-            <Reveal className="rounded-[2rem] border border-border/80 bg-background/72 p-6 shadow-[0_10px_24px_hsl(var(--foreground)/0.06)] backdrop-blur md:p-8">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-                Proof of fit
-              </p>
+        <section id="proof" className="scroll-mt-28 border-y border-border/70 py-20 md:py-32">
+          <div className="mx-auto grid w-full max-w-7xl gap-8 px-6 md:px-10 lg:grid-cols-[1.05fr_0.95fr] xl:gap-10">
+            <Reveal className="rounded-[2rem] border border-border/80 bg-background/72 p-7 shadow-[0_10px_24px_hsl(var(--foreground)/0.06)] backdrop-blur md:p-10">
+              <SectionLabel>Proof of fit</SectionLabel>
               <h2 className="mt-4 text-4xl font-black tracking-tight text-foreground md:text-5xl">
                 OrbitPlus is designed for PM teams that want tighter thinking, not noisier AI.
               </h2>
@@ -312,8 +301,8 @@ export default function HomePage() {
               </p>
             </Reveal>
 
-            <Reveal className="grid gap-4">
-              <div className="rounded-[2rem] border border-border/80 bg-background/72 p-6 shadow-[0_10px_24px_hsl(var(--foreground)/0.06)] backdrop-blur">
+            <Reveal className="grid gap-5">
+              <div className="rounded-[2rem] border border-border/80 bg-background/72 p-7 shadow-[0_10px_24px_hsl(var(--foreground)/0.06)] backdrop-blur md:p-8">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Why teams use it
                 </p>
@@ -330,7 +319,7 @@ export default function HomePage() {
                 </ul>
               </div>
 
-              <div className="rounded-[2rem] border border-border/80 bg-[linear-gradient(160deg,hsl(var(--accent)/0.12),transparent_55%),hsl(var(--background)/0.78)] p-6 shadow-[0_10px_24px_hsl(var(--foreground)/0.06)] backdrop-blur">
+              <div className="rounded-[2rem] border border-border/80 bg-[linear-gradient(160deg,hsl(var(--accent)/0.12),transparent_55%),hsl(var(--background)/0.78)] p-7 shadow-[0_10px_24px_hsl(var(--foreground)/0.06)] backdrop-blur md:p-8">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Closed-alpha positioning
                 </p>
@@ -347,12 +336,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="py-16 md:py-24">
-          <Reveal className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 md:px-10 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-4">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-                Start now
-              </p>
+        <section className="py-20 md:py-32">
+          <Reveal className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6 md:px-10 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-5 md:space-y-6">
+              <SectionLabel>Start now</SectionLabel>
               <h3 className="max-w-3xl text-4xl font-black tracking-tight text-foreground md:text-5xl">
                 If your PM process is split across tabs, OrbitPlus is built to pull it back into one flow.
               </h3>

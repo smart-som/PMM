@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { FileText, MoonStar, ShieldCheck, Sparkles, X } from "lucide-react";
 
+import { SectionLabel } from "@/components/marketing/section-label";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -79,10 +80,7 @@ export function MarketingBottomDock() {
           <div className="absolute bottom-[calc(100%+12px)] left-1/2 w-[min(92vw,360px)] -translate-x-1/2 rounded-3xl border border-border/80 bg-background/95 p-5 shadow-[0_24px_80px_hsl(var(--foreground)/0.28)] backdrop-blur-xl">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
-                  {PanelIcon ? <PanelIcon className="h-3.5 w-3.5" /> : null}
-                  <span>{panel.eyebrow}</span>
-                </div>
+                <SectionLabel icon={PanelIcon}>{panel.eyebrow}</SectionLabel>
                 <div className="space-y-2">
                   <p className="text-base font-semibold text-foreground">{panel.title}</p>
                   <p className="text-sm leading-6 text-muted-foreground">{panel.body}</p>

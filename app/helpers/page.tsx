@@ -11,6 +11,7 @@ import {
 
 import { MarketingLayout } from "@/components/marketing/marketing-layout";
 import { Reveal } from "@/components/marketing/reveal";
+import { SectionLabel } from "@/components/marketing/section-label";
 import { HELPER_STUDY_INTEREST_OPTIONS } from "@/lib/helper/study-interests";
 
 const HELPER_STEPS = [
@@ -69,12 +70,11 @@ export default function HelpersLandingPage() {
         </nav>
 
         <section id="overview" className="overflow-hidden border-b border-border/70">
-          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-10 px-6 pb-20 pt-16 md:px-10 md:pb-24 md:pt-20 lg:grid-cols-[1.02fr_0.98fr]">
+          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-14 px-6 pb-24 pt-20 md:px-10 md:pb-32 md:pt-28 lg:grid-cols-[1.02fr_0.98fr] xl:gap-20">
             <Reveal className="orbitplus-enter flex flex-col justify-center">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-success/35 bg-success/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Helper Network</span>
-              </div>
+              <SectionLabel icon={Sparkles} tone="success">
+                Helper Network
+              </SectionLabel>
 
               <h1 className="mt-6 max-w-4xl text-5xl font-black leading-[0.92] tracking-tight text-foreground md:text-7xl">
                 Help shape better products before payout tooling even goes live.
@@ -177,22 +177,20 @@ export default function HelpersLandingPage() {
           </div>
         </section>
 
-        <section id="study-types" className="scroll-mt-28 border-b border-border/70 py-16 md:py-24">
+        <section id="study-types" className="scroll-mt-28 border-b border-border/70 py-20 md:py-32">
           <div className="mx-auto w-full max-w-7xl px-6 md:px-10">
-            <Reveal className="max-w-3xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-                Study types
-              </p>
-              <h2 className="mt-3 text-4xl font-black tracking-tight text-foreground md:text-5xl">
+            <Reveal className="max-w-3xl space-y-5 md:space-y-6">
+              <SectionLabel>Study types</SectionLabel>
+              <h2 className="text-4xl font-black tracking-tight text-foreground md:text-5xl">
                 Helpers can now choose the categories they want to see first.
               </h2>
-              <p className="mt-4 text-base leading-8 text-muted-foreground">
+              <p className="text-base leading-8 text-muted-foreground">
                 OrbitPlus supports a broad set of product research categories. Helpers can choose
                 all studies or focus on the work that fits their background and curiosity best.
               </p>
             </Reveal>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-10 flex flex-wrap gap-4">
               {STUDY_TYPE_LABELS.map((label) => (
                 <div
                   key={label}
@@ -205,18 +203,16 @@ export default function HelpersLandingPage() {
           </div>
         </section>
 
-        <section id="how-it-works" className="scroll-mt-28 py-16 md:py-24">
+        <section id="how-it-works" className="scroll-mt-28 py-20 md:py-32">
           <div className="mx-auto w-full max-w-7xl px-6 md:px-10">
-            <Reveal className="max-w-3xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-                How it works
-              </p>
-              <h2 className="mt-3 text-4xl font-black tracking-tight text-foreground md:text-5xl">
+            <Reveal className="max-w-3xl space-y-5 md:space-y-6">
+              <SectionLabel>How it works</SectionLabel>
+              <h2 className="text-4xl font-black tracking-tight text-foreground md:text-5xl">
                 Join early, answer clearly, and help PMs make sharper calls.
               </h2>
             </Reveal>
 
-            <div className="mt-10 grid gap-4 lg:grid-cols-3">
+            <div className="mt-12 grid gap-5 lg:grid-cols-3">
               {HELPER_STEPS.map((item, index) => (
                 <Reveal
                   key={item.title}
@@ -235,13 +231,10 @@ export default function HelpersLandingPage() {
           </div>
         </section>
 
-        <section id="portal" className="scroll-mt-28 border-y border-border/70 py-16 md:py-24">
-          <div className="mx-auto grid w-full max-w-7xl gap-6 px-6 md:px-10 lg:grid-cols-[1fr_1fr]">
-            <Reveal className="rounded-[2rem] border border-border/80 bg-background/72 p-6 shadow-[0_10px_24px_hsl(var(--foreground)/0.06)] backdrop-blur md:p-8">
-              <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
-                <MessageSquareQuote className="h-3.5 w-3.5" />
-                <span>Portal experience</span>
-              </div>
+        <section id="portal" className="scroll-mt-28 border-y border-border/70 py-20 md:py-32">
+          <div className="mx-auto grid w-full max-w-7xl gap-8 px-6 md:px-10 lg:grid-cols-[1fr_1fr] xl:gap-10">
+            <Reveal className="rounded-[2rem] border border-border/80 bg-background/72 p-7 shadow-[0_10px_24px_hsl(var(--foreground)/0.06)] backdrop-blur md:p-10">
+              <SectionLabel icon={MessageSquareQuote}>Portal experience</SectionLabel>
               <h2 className="mt-4 text-4xl font-black tracking-tight text-foreground md:text-5xl">
                 The active helper portal is already aligned with the current product.
               </h2>
@@ -252,8 +245,8 @@ export default function HelpersLandingPage() {
               </p>
             </Reveal>
 
-            <Reveal className="grid gap-4">
-              <div className="rounded-[2rem] border border-border/80 bg-background/72 p-6 shadow-[0_10px_24px_hsl(var(--foreground)/0.06)] backdrop-blur">
+            <Reveal className="grid gap-5">
+              <div className="rounded-[2rem] border border-border/80 bg-background/72 p-7 shadow-[0_10px_24px_hsl(var(--foreground)/0.06)] backdrop-blur md:p-8">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                   Current reality
                 </p>
@@ -270,7 +263,7 @@ export default function HelpersLandingPage() {
                 </ul>
               </div>
 
-              <div className="rounded-[2rem] border border-warning/25 bg-warning/10 p-6 shadow-[0_10px_24px_hsl(var(--foreground)/0.05)]">
+              <div className="rounded-[2rem] border border-warning/25 bg-warning/10 p-7 shadow-[0_10px_24px_hsl(var(--foreground)/0.05)] md:p-8">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-warning">
                   Important note
                 </p>
@@ -286,12 +279,10 @@ export default function HelpersLandingPage() {
           </div>
         </section>
 
-        <section className="py-16 md:py-24">
-          <Reveal className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 md:px-10 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-4">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-accent">
-                Join the network
-              </p>
+        <section className="py-20 md:py-32">
+          <Reveal className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6 md:px-10 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-5 md:space-y-6">
+              <SectionLabel>Join the network</SectionLabel>
               <h3 className="max-w-3xl text-4xl font-black tracking-tight text-foreground md:text-5xl">
                 If you enjoy spotting product friction and giving practical feedback, OrbitPlus is being built for you too.
               </h3>
